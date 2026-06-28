@@ -10,7 +10,9 @@ import {
   refreshSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from '../lib/schemas'
+import { sendSms } from '../lib/sms'
 
 const router = Router()
 
@@ -22,6 +24,7 @@ interface DbUser {
   email: string
   password_hash: string
   role: string
+  phone: string | null
   index_number: string | null
   department: string | null
   program: string | null
@@ -139,19 +142,20 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
 router.post('/forgot-password', validate(forgotPasswordSchema), async (req: Request, res: Response): Promise<void> => {
   const { email } = req.body
 
-  if (!email) {
-    res.status(400).json({ error: 'Email is required' })
-    return
-  }
-
   const user = await queryOne<DbUser>(
-    'SELECT id FROM users WHERE email = $1',
+    'SELECT id, name, phone FROM users WHERE email = $1',
     [email.toLowerCase().trim()]
   )
 
   // Always respond with success to prevent email enumeration
   if (!user) {
-    res.json({ message: 'If that email exists, a reset link has been sent.' })
+    res.json({ message: 'If that account exists, a reset code has been sent to your registered phone.' })
+    return
+  }
+
+  if (!user.phone) {
+    // Account exists but has no phone — still return generic message
+    res.json({ message: 'If that account exists, a reset code has been sent to your registered phone.' })
     return
   }
 
@@ -161,16 +165,23 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req: Requ
     [user.id]
   )
 
-  const token     = crypto.randomBytes(32).toString('hex')
+  // Generate a 6-digit OTP (100000–999999)
+  const otp       = String(100000 + (crypto.randomBytes(3).readUIntBE(0, 3) % 900000))
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60) // 1 hour
 
   await query(
     `INSERT INTO password_reset_tokens (user_id, token, expires_at)
      VALUES ($1, $2, $3)`,
-    [user.id, token, expiresAt]
+    [user.id, otp, expiresAt]
   )
 
-  res.json({ message: 'If that email exists, a reset link has been sent.' })
+  // Send OTP via SMS
+  sendSms(
+    'Hello {$name}. Your FYP-WMS password reset code is: {$otp}. It expires in 1 hour. If you did not request this, ignore this message.',
+    [{ number: user.phone, values: [user.name, otp] }]
+  )
+
+  res.json({ message: 'If that account exists, a reset code has been sent to your registered phone.' })
 })
 
 // ─── POST /auth/reset-password ────────────────────────────────────────────────
@@ -213,6 +224,32 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req: Reques
   )
 
   res.json({ message: 'Password updated successfully.' })
+})
+
+// ─── POST /auth/change-password ──────────────────────────────────────────────
+
+router.post('/change-password', authenticate, validate(changePasswordSchema), async (req: Request, res: Response): Promise<void> => {
+  const { currentPassword, newPassword } = req.body
+
+  const user = await queryOne<DbUser>(
+    'SELECT id, password_hash FROM users WHERE id = $1',
+    [req.user!.sub]
+  )
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const match = await bcrypt.compare(currentPassword, user.password_hash)
+  if (!match) {
+    res.status(400).json({ error: 'Current password is incorrect' })
+    return
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10)
+  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.id])
+
+  res.json({ message: 'Password changed successfully.' })
 })
 
 export default router
