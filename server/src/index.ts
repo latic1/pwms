@@ -17,6 +17,7 @@ import gradeRoutes             from './routes/grades'
 import periodRoutes            from './routes/periods'
 import auditLogRoutes          from './routes/auditLog'
 import publicRoutes            from './routes/public'
+import reportRoutes            from './routes/reports'
 
 dotenv.config()
 
@@ -71,6 +72,7 @@ app.use('/periods',         periodRoutes)
 app.use('/audit-log',              auditLogRoutes)
 app.use('/admin/announcements',    adminAnnouncementRoutes)
 app.use('/public',                 publicRoutes)
+app.use('/reports',                reportRoutes)
 app.use('/uploads',                express.static('uploads'))
 
 // ─── 404 catch-all ────────────────────────────────────────────────────────────
