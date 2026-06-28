@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import api from '@/lib/api'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
@@ -80,7 +80,7 @@ export default function ResetPasswordPage() {
               inputMode="numeric"
               placeholder="6-digit code"
               maxLength={6}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-center tracking-[0.4em] text-lg font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 transition"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-lg text-center tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 transition"
             />
           </div>
 
@@ -133,5 +133,13 @@ export default function ResetPasswordPage() {
         <Link href="/login" className="text-blue-600 hover:underline">Back to sign in</Link>
       </p>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordForm />
+    </Suspense>
   )
 }
