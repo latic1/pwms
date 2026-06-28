@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
-import type { User, Role } from '@/types'
+import type { User } from '@/types'
 import { API_BASE } from './api'
 
 interface LoginResponse {
@@ -24,48 +24,9 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
-  /** Dev-only: switch role without real auth */
-  setRole?: (role: Role) => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
-
-const IS_DEV = process.env.NODE_ENV === 'development'
-
-// Dev mock users matching seed data
-const DEV_USERS: Record<Role, User> = {
-  student: {
-    id: 'u1',
-    name: 'Alice Johnson',
-    email: 'alice@university.edu',
-    role: 'student',
-    indexNumber: 'UG/2021/001',
-    department: 'Computer Science',
-    program: 'BSc Computer Science',
-    createdAt: new Date().toISOString(),
-  },
-  supervisor: {
-    id: 'u4',
-    name: 'Dr. Smith',
-    email: 'smith@university.edu',
-    role: 'supervisor',
-    createdAt: new Date().toISOString(),
-  },
-  admin: {
-    id: 'u6',
-    name: 'Admin User',
-    email: 'admin@university.edu',
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
-  examiner: {
-    id: 'u7',
-    name: 'Dr. Jones',
-    email: 'jones@university.edu',
-    role: 'examiner',
-    createdAt: new Date().toISOString(),
-  },
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -114,15 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login')
   }, [router])
 
-  // Dev-only role switcher (bypasses real auth)
-  const setRole = IS_DEV
-    ? (role: Role) => {
-        setUser(DEV_USERS[role])
-      }
-    : undefined
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, setRole }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

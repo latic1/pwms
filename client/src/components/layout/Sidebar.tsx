@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import type { Role } from '@/types'
 
@@ -45,25 +45,17 @@ const roleMeta: Record<Role, { label: string; accent: string; dot: string }> = {
   examiner:   { label: 'Examiner',   accent: 'text-amber-400',  dot: 'bg-amber-400' },
 }
 
-const IS_DEV = process.env.NODE_ENV === 'development'
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const { user, logout, setRole } = useAuth()
+  const { user, logout } = useAuth()
   const pathname = usePathname()
-  const router   = useRouter()
 
   if (!user) return null
 
   const items  = navItems[user.role] ?? []
   const meta   = roleMeta[user.role]
   const initials = user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-
-  function handleRoleSwitch(r: Role) {
-    setRole?.(r)
-    router.push(navItems[r][0]?.href ?? '/')
-  }
 
   return (
     <aside className="w-64 shrink-0 min-h-screen bg-[#0f1117] text-white flex flex-col border-r border-white/[0.06]">
@@ -109,32 +101,6 @@ export function Sidebar() {
           )
         })}
       </nav>
-
-      {/* Dev role switcher */}
-      {IS_DEV && setRole && (
-        <div className="px-3 pb-2">
-          <div className="rounded-lg bg-white/[0.04] border border-white/[0.07] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-2">
-              Dev · Switch Role
-            </p>
-            <div className="grid grid-cols-2 gap-1">
-              {(['student', 'supervisor', 'admin', 'examiner'] as Role[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => handleRoleSwitch(r)}
-                  className={`text-[11px] px-2 py-1.5 rounded-md capitalize transition-all ${
-                    user.role === r
-                      ? 'bg-indigo-600 text-white font-semibold'
-                      : 'bg-white/[0.06] hover:bg-white/10 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* User profile */}
       <div className="px-3 pb-4 border-t border-white/[0.06] pt-3">
