@@ -83,7 +83,7 @@ function BulkImportPanel({ onDone }: { onDone: () => void }) {
   const [copied,  setCopied]  = useState(false)
 
   function downloadTemplate() {
-    const csv = 'name,email,indexNumber,department,program\nJane Doe,jane@uni.edu,CS/2024/001,Computer Science,BSc Computer Science\n'
+    const csv = 'name,email,phone,indexNumber,department,program\nJane Doe,jane@uni.edu,0246314915,CS/2024/001,Computer Science,BSc Computer Science\n'
     const blob = new Blob([csv], { type: 'text/csv' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
@@ -234,7 +234,7 @@ function BulkImportPanel({ onDone }: { onDone: () => void }) {
       <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700 space-y-1">
         <p className="font-semibold">Required columns:</p>
         <p><code className="bg-white/70 px-1 rounded">name</code>, <code className="bg-white/70 px-1 rounded">email</code></p>
-        <p className="text-blue-500">Optional: <code className="bg-white/70 px-1 rounded">indexNumber</code>, <code className="bg-white/70 px-1 rounded">department</code>, <code className="bg-white/70 px-1 rounded">program</code></p>
+        <p className="text-blue-500">Optional: <code className="bg-white/70 px-1 rounded">phone</code>, <code className="bg-white/70 px-1 rounded">indexNumber</code>, <code className="bg-white/70 px-1 rounded">department</code>, <code className="bg-white/70 px-1 rounded">program</code></p>
         <p className="text-blue-500">Column names are case-insensitive. All imported users are created as <strong>students</strong>.</p>
       </div>
 
@@ -298,6 +298,7 @@ export default function UsersPage() {
   // Form state
   const [name,        setName]        = useState('')
   const [email,       setEmail]       = useState('')
+  const [phone,       setPhone]       = useState('')
   const [role,        setRole]        = useState<Role>('student')
   const [indexNumber, setIndexNumber] = useState('')
   const [department,  setDepartment]  = useState('')
@@ -313,7 +314,7 @@ export default function UsersPage() {
   })
 
   function openForm() {
-    setName(''); setEmail(''); setRole('student')
+    setName(''); setEmail(''); setPhone(''); setRole('student')
     setIndexNumber(''); setDepartment(''); setProgram('')
     setFormError(''); setNewCreds(null)
     setShowForm(true)
@@ -327,6 +328,7 @@ export default function UsersPage() {
       const res = await api.post('/admin/users', {
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        phone: phone.trim() || undefined,
         role,
         ...(role === 'student' && {
           indexNumber: indexNumber.trim(),
@@ -462,6 +464,19 @@ export default function UsersPage() {
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Phone number <span className="text-gray-400 font-normal">(optional — for SMS notifications)</span>
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 0246314915"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
 
             <div>
