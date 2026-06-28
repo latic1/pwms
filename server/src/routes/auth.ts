@@ -170,10 +170,6 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req: Requ
     [user.id, token, expiresAt]
   )
 
-  // TODO: send email with reset link containing token
-  // e.g. `${process.env.CLIENT_URL}/reset-password?token=${token}`
-  console.log(`[DEV] Password reset token for ${email}: ${token}`)
-
   res.json({ message: 'If that email exists, a reset link has been sent.' })
 })
 
