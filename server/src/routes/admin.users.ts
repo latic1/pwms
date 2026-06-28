@@ -7,6 +7,7 @@ import { query, queryOne } from '../db'
 import { authenticate, requireRole } from '../middleware/authenticate'
 import { validate } from '../middleware/validate'
 import { createUserSchema, updateUserSchema } from '../lib/schemas'
+import { smsNewUser } from '../lib/sms'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
@@ -28,6 +29,7 @@ interface DbUser {
   name: string
   email: string
   role: string
+  phone: string | null
   index_number: string | null
   department: string | null
   program: string | null
@@ -38,7 +40,7 @@ interface DbUser {
 
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   const users = await query<DbUser>(
-    `SELECT id, name, email, role, index_number, department, program, created_at
+    `SELECT id, name, email, role, phone, index_number, department, program, created_at
      FROM users
      ORDER BY created_at DESC`
   )
@@ -49,7 +51,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
 // ─── POST /admin/users ────────────────────────────────────────────────────────
 
 router.post('/', validate(createUserSchema), async (req: Request, res: Response): Promise<void> => {
-  const { name, email, role, indexNumber, department, program } = req.body
+  const { name, email, role, phone, indexNumber, department, program } = req.body
 
   if (!name || !email || !role) {
     res.status(400).json({ error: 'name, email and role are required' })
@@ -82,20 +84,28 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
   const tempPassword = generateTempPassword()
   const passwordHash = await bcrypt.hash(tempPassword, 10)
 
+  const cleanPhone = phone?.trim().replace(/\s+/g, '') || null
+
   const [newUser] = await query<DbUser>(
-    `INSERT INTO users (name, email, password_hash, role, index_number, department, program)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, name, email, role, index_number, department, program, created_at`,
+    `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id, name, email, role, phone, index_number, department, program, created_at`,
     [
       name.trim(),
       email.toLowerCase().trim(),
       passwordHash,
       role,
+      cleanPhone,
       role === 'student' ? (indexNumber ?? null) : null,
       role === 'student' ? (department ?? null)  : null,
       role === 'student' ? (program ?? null)      : null,
     ]
   )
+
+  // Fire SMS in the background — don't block the response
+  if (cleanPhone) {
+    smsNewUser(cleanPhone, newUser.name, newUser.email, tempPassword)
+  }
 
   // Return the temp password once — admin must share it with the user
   res.status(201).json({ ...toSafeUser(newUser), tempPassword })
@@ -176,6 +186,7 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
 
     const name        = col(row, 'name', 'fullname', 'studentname')
     const email       = col(row, 'email', 'emailaddress').toLowerCase()
+    const phone       = col(row, 'phone', 'phonenumber', 'mobile', 'tel').replace(/\s+/g, '') || null
     const indexNumber = col(row, 'indexnumber', 'index', 'indexno', 'studentid')
     const department  = col(row, 'department', 'dept')
     const program     = col(row, 'program', 'programme', 'course')
@@ -209,11 +220,13 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
     const passwordHash = await bcrypt.hash(tempPassword, 10)
 
     const [newUser] = await query<DbUser>(
-      `INSERT INTO users (name, email, password_hash, role, index_number, department, program)
-       VALUES ($1, $2, $3, 'student', $4, $5, $6)
-       RETURNING id, name, email, role, index_number, department, program, created_at`,
-      [name, email, passwordHash, indexNumber || null, department || null, program || null]
+      `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program)
+       VALUES ($1, $2, $3, 'student', $4, $5, $6, $7)
+       RETURNING id, name, email, role, phone, index_number, department, program, created_at`,
+      [name, email, passwordHash, phone || null, indexNumber || null, department || null, program || null]
     )
+
+    if (phone) smsNewUser(phone, newUser.name, newUser.email, tempPassword)
 
     created.push({ ...toSafeUser(newUser), tempPassword })
   }
@@ -273,6 +286,7 @@ function toSafeUser(u: DbUser) {
     name:        u.name,
     email:       u.email,
     role:        u.role,
+    phone:       u.phone,
     indexNumber: u.index_number,
     department:  u.department,
     program:     u.program,

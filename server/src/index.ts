@@ -18,6 +18,7 @@ import periodRoutes            from './routes/periods'
 import auditLogRoutes          from './routes/auditLog'
 import publicRoutes            from './routes/public'
 import reportRoutes            from './routes/reports'
+import { startDeadlineReminders } from './lib/deadlineReminder'
 
 dotenv.config()
 
@@ -92,4 +93,5 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
+  startDeadlineReminders()
 })

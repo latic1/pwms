@@ -3,6 +3,7 @@ import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
+import { smsProposalDecision } from '../lib/sms'
 import { validate } from '../middleware/validate'
 import { reviewProposalSchema } from '../lib/schemas'
 
@@ -245,6 +246,21 @@ router.patch('/:groupId/review', requireRole('supervisor'), validate(reviewPropo
   await audit(supervisorId, `proposal.${status}`, 'proposal', proposal.id, {
     groupId, version: proposal.version, comment: comment?.trim(),
   })
+
+  // SMS all group members who have a phone number
+  const members = await query<{ name: string; phone: string | null }>(
+    `SELECT u.name, u.phone
+     FROM group_members gm
+     JOIN users u ON u.id = gm.user_id
+     WHERE gm.group_id = $1`,
+    [groupId]
+  )
+  smsProposalDecision(
+    members.filter((m) => m.phone).map((m) => ({ name: m.name, phone: m.phone! })),
+    proposal.title,
+    status,
+    comment?.trim()
+  )
 
   res.json(formatProposal(updated))
 })
