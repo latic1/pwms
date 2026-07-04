@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { query, queryOne } from '../db'
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/jwt'
-import { authenticate } from '../middleware/authenticate'
+import { authenticate, requireRole } from '../middleware/authenticate'
 import { validate } from '../middleware/validate'
 import {
   loginSchema,
@@ -11,6 +11,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   changePasswordSchema,
+  updateExpertiseSchema,
 } from '../lib/schemas'
 import { sendSms } from '../lib/sms'
 
@@ -28,6 +29,7 @@ interface DbUser {
   index_number: string | null
   department: string | null
   program: string | null
+  expertise: string | null
 }
 
 // ─── POST /auth/login ─────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ router.post('/refresh', validate(refreshSchema), async (req: Request, res: Respo
 
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   const user = await queryOne<DbUser>(
-    `SELECT id, name, email, role, index_number, department, program
+    `SELECT id, name, email, role, index_number, department, program, expertise
      FROM users WHERE id = $1`,
     [req.user!.sub]
   )
@@ -134,8 +136,25 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
     indexNumber: user.index_number,
     department:  user.department,
     program:     user.program,
+    expertise:   user.expertise,
   })
 })
+
+// ─── PATCH /auth/me — self-service profile fields (currently: expertise) ─────
+
+router.patch(
+  '/me',
+  authenticate,
+  requireRole('supervisor'),
+  validate(updateExpertiseSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const { expertise } = req.body
+
+    await query('UPDATE users SET expertise = $1 WHERE id = $2', [expertise, req.user!.sub])
+
+    res.json({ expertise })
+  }
+)
 
 // ─── POST /auth/forgot-password ───────────────────────────────────────────────
 

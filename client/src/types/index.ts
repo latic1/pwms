@@ -109,6 +109,27 @@ export interface Grade {
   gradedAt: string
 }
 
+export interface TopicSuggestion {
+  title: string
+  description: string
+  keywords: string[]
+}
+
+export interface TopicSuggestionRecord {
+  id: string
+  interests: string
+  suggestions: TopicSuggestion[]
+  createdAt: string
+}
+
+export interface SupervisorMatch {
+  supervisorId: string
+  name: string
+  email: string
+  score: number
+  matchedKeywords: string[]
+}
+
 export interface AcademicPeriod {
   id: string
   name: string

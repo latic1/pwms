@@ -18,6 +18,7 @@ import periodRoutes            from './routes/periods'
 import auditLogRoutes          from './routes/auditLog'
 import publicRoutes            from './routes/public'
 import reportRoutes            from './routes/reports'
+import aiRoutes                from './routes/ai'
 import { startDeadlineReminders } from './lib/deadlineReminder'
 
 dotenv.config()
@@ -74,6 +75,7 @@ app.use('/audit-log',              auditLogRoutes)
 app.use('/admin/announcements',    adminAnnouncementRoutes)
 app.use('/public',                 publicRoutes)
 app.use('/reports',                reportRoutes)
+app.use('/ai',                     aiRoutes)
 app.use('/uploads',                express.static('uploads'))
 
 // ─── 404 catch-all ────────────────────────────────────────────────────────────

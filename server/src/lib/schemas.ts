@@ -104,3 +104,18 @@ export const createPeriodSchema = z.object({
   proposalDeadline:   z.string().min(1, 'Proposal deadline is required'),
   submissionDeadline: z.string().min(1, 'Submission deadline is required'),
 })
+
+// ─── AI Suggestions ───────────────────────────────────────────────────────────
+
+export const suggestTopicsSchema = z.object({
+  interests: z.array(z.string().min(2).max(60).trim()).min(1, 'At least one interest is required').max(10),
+})
+
+export const matchSupervisorsSchema = z.object({
+  topicTitle: z.string().min(2, 'Topic title is required').max(255).trim(),
+  keywords:   z.array(z.string().min(2).max(60).trim()).max(10).optional(),
+})
+
+export const updateExpertiseSchema = z.object({
+  expertise: z.string().max(500).trim(),
+})
