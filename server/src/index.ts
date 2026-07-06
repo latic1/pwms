@@ -26,6 +26,10 @@ dotenv.config()
 const app  = express()
 const PORT = process.env.PORT || 5000
 
+// Render (and most PaaS hosts) sit behind a reverse proxy — trust the first
+// hop so express-rate-limit keys on the real client IP, not the proxy's.
+app.set('trust proxy', 1)
+
 // ─── Global Middleware ────────────────────────────────────────────────────────
 
 app.use(helmet())
