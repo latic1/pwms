@@ -1,5 +1,28 @@
 import { query } from '../db'
 import { smsDeadlineReminder } from './sms'
+import { emailDeadlineReminder } from './email'
+
+interface ReminderMember {
+  name:  string
+  email: string
+  phone: string | null
+}
+
+/** Send a deadline reminder over both channels: email to all, SMS to those with a phone. */
+async function notifyMembers(members: ReminderMember[], deadlineType: string, dateLabel: string) {
+  await Promise.all([
+    smsDeadlineReminder(
+      members.filter((m) => m.phone).map((m) => ({ name: m.name, phone: m.phone! })),
+      deadlineType,
+      dateLabel
+    ),
+    emailDeadlineReminder(
+      members.map((m) => ({ name: m.name, email: m.email })),
+      deadlineType,
+      dateLabel
+    ),
+  ])
+}
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000
 
@@ -23,24 +46,24 @@ async function runCheck() {
   )
 
   for (const period of submissionPeriods) {
-    const members = await query<{ name: string; phone: string | null }>(
-      `SELECT DISTINCT u.name, u.phone
+    const members = await query<ReminderMember>(
+      `SELECT DISTINCT u.name, u.email, u.phone
        FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
        JOIN users u ON u.id = gm.user_id
-       WHERE g.period_id = $1 AND u.phone IS NOT NULL`,
+       WHERE g.period_id = $1`,
       [period.id]
     )
 
     if (members.length > 0) {
-      await smsDeadlineReminder(
-        members.map((m) => ({ name: m.name, phone: m.phone! })),
+      await notifyMembers(
+        members,
         'document submission',
         new Date(period.submission_deadline).toLocaleDateString('en-GB', {
           day: 'numeric', month: 'long', year: 'numeric',
         })
       )
-      console.log(`[Reminder] Submission deadline SMS sent for period "${period.name}" to ${members.length} students`)
+      console.log(`[Reminder] Submission deadline reminder sent for period "${period.name}" to ${members.length} students`)
     }
   }
 
@@ -54,13 +77,12 @@ async function runCheck() {
 
   for (const period of proposalPeriods) {
     // Only notify groups that haven't submitted a proposal yet
-    const members = await query<{ name: string; phone: string | null }>(
-      `SELECT DISTINCT u.name, u.phone
+    const members = await query<ReminderMember>(
+      `SELECT DISTINCT u.name, u.email, u.phone
        FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
        JOIN users u ON u.id = gm.user_id
        WHERE g.period_id = $1
-         AND u.phone IS NOT NULL
          AND NOT EXISTS (
            SELECT 1 FROM proposals p WHERE p.group_id = g.id
          )`,
@@ -68,14 +90,14 @@ async function runCheck() {
     )
 
     if (members.length > 0) {
-      await smsDeadlineReminder(
-        members.map((m) => ({ name: m.name, phone: m.phone! })),
+      await notifyMembers(
+        members,
         'proposal submission',
         new Date(period.proposal_deadline).toLocaleDateString('en-GB', {
           day: 'numeric', month: 'long', year: 'numeric',
         })
       )
-      console.log(`[Reminder] Proposal deadline SMS sent for period "${period.name}" to ${members.length} students`)
+      console.log(`[Reminder] Proposal deadline reminder sent for period "${period.name}" to ${members.length} students`)
     }
   }
 }

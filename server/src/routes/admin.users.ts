@@ -8,6 +8,7 @@ import { authenticate, requireRole } from '../middleware/authenticate'
 import { validate } from '../middleware/validate'
 import { createUserSchema, updateUserSchema } from '../lib/schemas'
 import { smsNewUser } from '../lib/sms'
+import { emailNewUser, emailPasswordReset } from '../lib/email'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
@@ -102,10 +103,11 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
     ]
   )
 
-  // Fire SMS in the background — don't block the response
+  // Fire SMS + email in the background — don't block the response
   if (cleanPhone) {
     smsNewUser(cleanPhone, newUser.name, newUser.email, tempPassword)
   }
+  emailNewUser(newUser.email, newUser.name, tempPassword)
 
   // Return the temp password once — admin must share it with the user
   res.status(201).json({ ...toSafeUser(newUser), tempPassword })
@@ -227,6 +229,7 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
     )
 
     if (phone) smsNewUser(phone, newUser.name, newUser.email, tempPassword)
+    emailNewUser(newUser.email, newUser.name, tempPassword)
 
     created.push({ ...toSafeUser(newUser), tempPassword })
   }
@@ -253,6 +256,9 @@ router.post('/:id/reset-password', async (req: Request, res: Response): Promise<
   const passwordHash = await bcrypt.hash(tempPassword, 10)
 
   await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, id])
+
+  // Email the new temp password in the background — don't block the response
+  emailPasswordReset(user.email, user.name, tempPassword)
 
   res.json({ tempPassword })
 })

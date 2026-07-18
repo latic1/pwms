@@ -33,9 +33,9 @@ export default function ForgotPasswordPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 8.25h3m-3 3h3m-6 3h.008v.008H9V15zm0 2.25h.008v.008H9v-.008z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Check your phone</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
           <p className="text-sm text-gray-500 mt-2">
-            If an account exists for <span className="font-medium text-gray-700">{email}</span> with a registered phone number, a 6-digit reset code has been sent via SMS.
+            If an account exists for <span className="font-medium text-gray-700">{email}</span>, a 6-digit reset code has been sent to your email (and by SMS if you have a registered phone number).
           </p>
         </div>
 
@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h1 className="text-2xl font-bold text-gray-900">Forgot your password?</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Enter your email and we'll send a reset code to your registered phone number.
+          Enter your email and we'll send you a reset code.
         </p>
       </div>
 

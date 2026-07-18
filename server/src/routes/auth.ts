@@ -14,6 +14,7 @@ import {
   updateExpertiseSchema,
 } from '../lib/schemas'
 import { sendSms } from '../lib/sms'
+import { emailPasswordResetOtp } from '../lib/email'
 
 const router = Router()
 
@@ -162,19 +163,13 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req: Requ
   const { email } = req.body
 
   const user = await queryOne<DbUser>(
-    'SELECT id, name, phone FROM users WHERE email = $1',
+    'SELECT id, name, email, phone FROM users WHERE email = $1',
     [email.toLowerCase().trim()]
   )
 
   // Always respond with success to prevent email enumeration
   if (!user) {
-    res.json({ message: 'If that account exists, a reset code has been sent to your registered phone.' })
-    return
-  }
-
-  if (!user.phone) {
-    // Account exists but has no phone — still return generic message
-    res.json({ message: 'If that account exists, a reset code has been sent to your registered phone.' })
+    res.json({ message: 'If that account exists, a reset code has been sent to your email and registered phone.' })
     return
   }
 
@@ -194,13 +189,16 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req: Requ
     [user.id, otp, expiresAt]
   )
 
-  // Send OTP via SMS
-  sendSms(
-    'Hello {$name}. Your FYP-WMS password reset code is: {$otp}. It expires in 1 hour. If you did not request this, ignore this message.',
-    [{ number: user.phone, values: [user.name, otp] }]
-  )
+  // Send OTP via email, plus SMS when a phone number is on file
+  emailPasswordResetOtp(user.email, user.name, otp)
+  if (user.phone) {
+    sendSms(
+      'Hello {$name}. Your FYP-WMS password reset code is: {$otp}. It expires in 1 hour. If you did not request this, ignore this message.',
+      [{ number: user.phone, values: [user.name, otp] }]
+    )
+  }
 
-  res.json({ message: 'If that account exists, a reset code has been sent to your registered phone.' })
+  res.json({ message: 'If that account exists, a reset code has been sent to your email and registered phone.' })
 })
 
 // ─── POST /auth/reset-password ────────────────────────────────────────────────

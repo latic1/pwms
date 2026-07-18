@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
 import { smsProposalDecision } from '../lib/sms'
+import { emailProposalDecision } from '../lib/email'
 import { validate } from '../middleware/validate'
 import { reviewProposalSchema } from '../lib/schemas'
 
@@ -247,9 +248,9 @@ router.patch('/:groupId/review', requireRole('supervisor'), validate(reviewPropo
     groupId, version: proposal.version, comment: comment?.trim(),
   })
 
-  // SMS all group members who have a phone number
-  const members = await query<{ name: string; phone: string | null }>(
-    `SELECT u.name, u.phone
+  // Notify all group members — SMS for those with a phone, email for everyone
+  const members = await query<{ name: string; email: string; phone: string | null }>(
+    `SELECT u.name, u.email, u.phone
      FROM group_members gm
      JOIN users u ON u.id = gm.user_id
      WHERE gm.group_id = $1`,
@@ -257,6 +258,12 @@ router.patch('/:groupId/review', requireRole('supervisor'), validate(reviewPropo
   )
   smsProposalDecision(
     members.filter((m) => m.phone).map((m) => ({ name: m.name, phone: m.phone! })),
+    proposal.title,
+    status,
+    comment?.trim()
+  )
+  emailProposalDecision(
+    members.map((m) => ({ name: m.name, email: m.email })),
     proposal.title,
     status,
     comment?.trim()
