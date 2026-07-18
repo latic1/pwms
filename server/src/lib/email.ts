@@ -1,44 +1,16 @@
 /**
- * Email client using Gmail SMTP (nodemailer).
- * Requires GMAIL_USER + GMAIL_APP_PASSWORD (a Google "App Password", not the
- * account password — generate one at https://myaccount.google.com/apppasswords,
- * which requires 2-Step Verification to be enabled).
+ * Email client using the Brevo transactional email HTTPS API.
+ * SMTP ports (25/465/587) are blocked on Render's free tier, so mail goes out
+ * over HTTPS instead. Requires BREVO_API_KEY plus EMAIL_FROM — a sender
+ * address verified in the Brevo dashboard (Senders & IPs → Senders).
  * Never throws — failures are logged and swallowed so email problems can't
  * break the main request, matching the SMS client's behaviour.
  */
 
-import nodemailer from 'nodemailer'
-import type SMTPTransport from 'nodemailer/lib/smtp-transport'
-import { resolve4 } from 'dns/promises'
-
-const GMAIL_USER = process.env.GMAIL_USER         ?? ''
-const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD ?? ''
-const FROM_NAME  = process.env.EMAIL_FROM_NAME    ?? 'FYP-WMS'
-
-const SMTP_HOST = 'smtp.gmail.com'
-
-/**
- * Build a transport pinned to an IPv4 address. Some hosts (e.g. Render) expose
- * an IPv6 interface without a working outbound IPv6 route, and nodemailer then
- * picks an unreachable AAAA address for smtp.gmail.com (ENETUNREACH). TLS still
- * validates against the real hostname via `servername`.
- */
-async function createTransporter() {
-  let host = SMTP_HOST
-  try {
-    const [addr] = await resolve4(SMTP_HOST)
-    if (addr) host = addr
-  } catch {
-    // A-record lookup failed — let nodemailer resolve the hostname itself
-  }
-  return nodemailer.createTransport({
-    host,
-    port: 465,
-    secure: true,
-    servername: SMTP_HOST,
-    auth: { user: GMAIL_USER, pass: GMAIL_PASS },
-  } as SMTPTransport.Options)
-}
+const API_URL   = 'https://api.brevo.com/v3/smtp/email'
+const API_KEY   = process.env.BREVO_API_KEY   ?? ''
+const FROM_ADDR = process.env.EMAIL_FROM      ?? ''
+const FROM_NAME = process.env.EMAIL_FROM_NAME ?? 'FYP-WMS'
 
 /** Escape user-supplied values interpolated into email HTML. */
 function esc(s: string): string {
@@ -64,20 +36,31 @@ function htmlTemplate(title: string, bodyHtml: string): string {
 
 /** Send one email. Resolves even on failure (logs the error instead). */
 export async function sendEmail(to: string, subject: string, title: string, bodyHtml: string): Promise<void> {
-  if (!GMAIL_USER || !GMAIL_PASS) {
-    console.warn('[Email] GMAIL_USER or GMAIL_APP_PASSWORD not set — skipping email')
+  if (!API_KEY || !FROM_ADDR) {
+    console.warn('[Email] BREVO_API_KEY or EMAIL_FROM not set — skipping email')
     return
   }
   if (!to || !to.includes('@')) return
 
   try {
-    const transporter = await createTransporter()
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${GMAIL_USER}>`,
-      to,
-      subject,
-      html: htmlTemplate(title, bodyHtml),
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'api-key':      API_KEY,
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: FROM_NAME, email: FROM_ADDR },
+        to: [{ email: to }],
+        subject,
+        htmlContent: htmlTemplate(title, bodyHtml),
+      }),
     })
+
+    if (!res.ok) {
+      console.error(`[Email] Request failed ${res.status}:`, await res.text())
+    }
   } catch (err) {
     console.error(`[Email] Failed to send to ${to}:`, err)
   }
