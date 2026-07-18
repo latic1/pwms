@@ -8,19 +8,37 @@
  */
 
 import nodemailer from 'nodemailer'
+import type SMTPTransport from 'nodemailer/lib/smtp-transport'
+import { resolve4 } from 'dns/promises'
 
 const GMAIL_USER = process.env.GMAIL_USER         ?? ''
 const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD ?? ''
 const FROM_NAME  = process.env.EMAIL_FROM_NAME    ?? 'FYP-WMS'
 
-const transporter = GMAIL_USER && GMAIL_PASS
-  ? nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user: GMAIL_USER, pass: GMAIL_PASS },
-    })
-  : null
+const SMTP_HOST = 'smtp.gmail.com'
+
+/**
+ * Build a transport pinned to an IPv4 address. Some hosts (e.g. Render) expose
+ * an IPv6 interface without a working outbound IPv6 route, and nodemailer then
+ * picks an unreachable AAAA address for smtp.gmail.com (ENETUNREACH). TLS still
+ * validates against the real hostname via `servername`.
+ */
+async function createTransporter() {
+  let host = SMTP_HOST
+  try {
+    const [addr] = await resolve4(SMTP_HOST)
+    if (addr) host = addr
+  } catch {
+    // A-record lookup failed — let nodemailer resolve the hostname itself
+  }
+  return nodemailer.createTransport({
+    host,
+    port: 465,
+    secure: true,
+    servername: SMTP_HOST,
+    auth: { user: GMAIL_USER, pass: GMAIL_PASS },
+  } as SMTPTransport.Options)
+}
 
 /** Escape user-supplied values interpolated into email HTML. */
 function esc(s: string): string {
@@ -46,13 +64,14 @@ function htmlTemplate(title: string, bodyHtml: string): string {
 
 /** Send one email. Resolves even on failure (logs the error instead). */
 export async function sendEmail(to: string, subject: string, title: string, bodyHtml: string): Promise<void> {
-  if (!transporter) {
+  if (!GMAIL_USER || !GMAIL_PASS) {
     console.warn('[Email] GMAIL_USER or GMAIL_APP_PASSWORD not set — skipping email')
     return
   }
   if (!to || !to.includes('@')) return
 
   try {
+    const transporter = await createTransporter()
     await transporter.sendMail({
       from: `"${FROM_NAME}" <${GMAIL_USER}>`,
       to,
