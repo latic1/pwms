@@ -22,6 +22,8 @@ interface DbGroup {
   supervisor_id: string | null
   panel_id: string | null
   period_id: string | null
+  result_approved_by: string | null
+  result_approved_at: string | null
   created_at: string
 }
 
@@ -49,10 +51,12 @@ function formatGroup(
     name:         group.name,
     inviteCode:   group.invite_code,
     leaderId:     group.leader_id,
-    supervisorId: group.supervisor_id,
-    panelId:      group.panel_id,
-    periodId:     group.period_id,
-    createdAt:    group.created_at,
+    supervisorId:     group.supervisor_id,
+    panelId:          group.panel_id,
+    periodId:         group.period_id,
+    resultApproved:   group.result_approved_at != null,
+    resultApprovedAt: group.result_approved_at,
+    createdAt:        group.created_at,
     supervisor,
     panel,
     members: members.map((m) => ({
@@ -374,6 +378,101 @@ router.patch('/:id/panel', requireRole('admin'), async (req: Request, res: Respo
 
   const full = await getGroupWithMembers(id)
   res.json(full)
+})
+
+// ─── POST /groups/:id/approve-result — panel signs off the final result ───────
+// A panel member confirms the group's final result once the supervisor grade
+// and at least one panel grade are in. Admin can only release a period's
+// grades when every graded group has this sign-off.
+
+router.post('/:id/approve-result', requireRole('supervisor', 'admin'), async (req: Request, res: Response): Promise<void> => {
+  const id = p(req.params.id)
+  const { sub, role } = req.user!
+
+  const group = await queryOne<DbGroup>('SELECT * FROM groups WHERE id = $1', [id])
+  if (!group) {
+    res.status(404).json({ error: 'Group not found' })
+    return
+  }
+
+  if (role !== 'admin') {
+    const onPanel = group.panel_id
+      ? await queryOne('SELECT 1 FROM panel_members WHERE panel_id = $1 AND user_id = $2', [group.panel_id, sub])
+      : null
+    if (!onPanel) {
+      res.status(403).json({ error: 'Only members of this group\'s examination panel can approve its result' })
+      return
+    }
+  }
+
+  const gradeStats = await queryOne<{ supervisor_count: string; panel_count: string }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE grader_role = 'supervisor') AS supervisor_count,
+       COUNT(*) FILTER (WHERE grader_role = 'panel')      AS panel_count
+     FROM grades WHERE group_id = $1`,
+    [id]
+  )
+  if (parseInt(gradeStats?.supervisor_count ?? '0') === 0 || parseInt(gradeStats?.panel_count ?? '0') === 0) {
+    res.status(409).json({ error: 'Result cannot be approved until the supervisor grade and at least one panel grade are submitted' })
+    return
+  }
+
+  if (group.period_id) {
+    const period = await queryOne<{ grades_released: boolean }>(
+      'SELECT grades_released FROM academic_periods WHERE id = $1',
+      [group.period_id]
+    )
+    if (period?.grades_released) {
+      res.status(409).json({ error: 'Grades for this period have already been released' })
+      return
+    }
+  }
+
+  const [updated] = await query<DbGroup>(
+    'UPDATE groups SET result_approved_by = $1, result_approved_at = NOW() WHERE id = $2 RETURNING *',
+    [sub, id]
+  )
+
+  await audit(sub, 'result.approved', 'group', id, {})
+  res.json({ id: updated.id, resultApproved: true, resultApprovedAt: updated.result_approved_at })
+})
+
+// ─── DELETE /groups/:id/approve-result — revoke the sign-off (before release) ─
+
+router.delete('/:id/approve-result', requireRole('supervisor', 'admin'), async (req: Request, res: Response): Promise<void> => {
+  const id = p(req.params.id)
+  const { sub, role } = req.user!
+
+  const group = await queryOne<DbGroup>('SELECT * FROM groups WHERE id = $1', [id])
+  if (!group) {
+    res.status(404).json({ error: 'Group not found' })
+    return
+  }
+
+  if (role !== 'admin') {
+    const onPanel = group.panel_id
+      ? await queryOne('SELECT 1 FROM panel_members WHERE panel_id = $1 AND user_id = $2', [group.panel_id, sub])
+      : null
+    if (!onPanel) {
+      res.status(403).json({ error: 'Only members of this group\'s examination panel can revoke its result approval' })
+      return
+    }
+  }
+
+  if (group.period_id) {
+    const period = await queryOne<{ grades_released: boolean }>(
+      'SELECT grades_released FROM academic_periods WHERE id = $1',
+      [group.period_id]
+    )
+    if (period?.grades_released) {
+      res.status(409).json({ error: 'Grades for this period have already been released' })
+      return
+    }
+  }
+
+  await query('UPDATE groups SET result_approved_by = NULL, result_approved_at = NULL WHERE id = $1', [id])
+  await audit(sub, 'result.approval_revoked', 'group', id, {})
+  res.status(204).send()
 })
 
 // ─── PATCH /groups/:id/leader — reassign leader (admin only) ─────────────────

@@ -2,10 +2,15 @@
 
 import { use, useState } from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
 import { useGroup } from '@/hooks/useGroup'
 import { useDocuments } from '@/hooks/useDocuments'
 import { useGrades, useMyGrade } from '@/hooks/useGrades'
+import { useProposal } from '@/hooks/useProposal'
 import api from '@/lib/api'
+import type { AiReviewContext } from '@/types'
+
+const aiFetcher = (url: string) => api.get(url).then((r) => r.data)
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -44,15 +49,60 @@ const docTypeStyles: Record<string, string> = {
 export default function PanelGradingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: groupId } = use(params)
 
-  const { group }     = useGroup(groupId)
+  const { group, mutate: mutateGroup } = useGroup(groupId)
   const { documents } = useDocuments(groupId)
   const { grades }    = useGrades(groupId)
   const { grade: myGrade, mutate: mutateMyGrade } = useMyGrade(groupId)
+  const { proposal, mutate: mutateProposal } = useProposal(groupId)
+  const { data: aiContext } = useSWR<AiReviewContext>(`/ai/group/${groupId}/review`, aiFetcher)
 
   const [scores,   setScores]   = useState<Record<string, number>>({})
   const [feedback, setFeedback] = useState('')
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
+
+  // Proposal review state
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewBusy,    setReviewBusy]    = useState(false)
+  const [reviewError,   setReviewError]   = useState('')
+  const [showAi,        setShowAi]        = useState(false)
+
+  // Result approval state
+  const [approvalBusy,  setApprovalBusy]  = useState(false)
+  const [approvalError, setApprovalError] = useState('')
+
+  async function handleReview(status: 'approved' | 'rejected' | 'changes_requested') {
+    if (status !== 'approved' && !reviewComment.trim()) {
+      setReviewError('A comment is required when rejecting or requesting changes.')
+      return
+    }
+    setReviewError(''); setReviewBusy(true)
+    try {
+      await api.patch(`/proposals/${groupId}/review`, {
+        status,
+        supervisorComment: reviewComment.trim() || undefined,
+      })
+      await mutateProposal()
+      setReviewComment('')
+    } catch (err: any) {
+      setReviewError(err?.response?.data?.error ?? 'Failed to submit review.')
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  async function handleResultApproval(approve: boolean) {
+    setApprovalError(''); setApprovalBusy(true)
+    try {
+      if (approve) await api.post(`/groups/${groupId}/approve-result`)
+      else         await api.delete(`/groups/${groupId}/approve-result`)
+      await mutateGroup()
+    } catch (err: any) {
+      setApprovalError(err?.response?.data?.error ?? 'Failed to update result approval.')
+    } finally {
+      setApprovalBusy(false)
+    }
+  }
 
   const supervisorGrade = grades.find((g) => g.graderRole === 'supervisor') ?? null
   const panelGrades     = grades.filter((g) => g.graderRole === 'panel')
@@ -108,6 +158,120 @@ export default function PanelGradingPage({ params }: { params: Promise<{ id: str
       <div className="grid md:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="md:col-span-2 space-y-5">
+
+          {/* Proposal review */}
+          {proposal && (
+            <div className="bg-white rounded-xl border shadow-sm p-5">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <h2 className="font-semibold text-gray-800">Project Proposal</h2>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                  proposal.status === 'approved'          ? 'bg-green-100 text-green-700'
+                  : proposal.status === 'rejected'        ? 'bg-red-100 text-red-700'
+                  : proposal.status === 'changes_requested' ? 'bg-amber-100 text-amber-700'
+                  : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {proposal.status === 'changes_requested' ? 'Changes requested' : proposal.status} · v{proposal.version}
+                </span>
+              </div>
+              <p className="text-sm font-medium text-gray-800">{proposal.title}</p>
+              <p className="text-sm text-gray-500 mt-1 whitespace-pre-wrap">{proposal.abstract}</p>
+              {proposal.supervisorComment && (
+                <p className="text-xs text-gray-500 italic mt-2">Panel feedback: "{proposal.supervisorComment}"</p>
+              )}
+
+              {/* AI insights toggle */}
+              {aiContext && (aiContext.topicHistory.length > 0 || aiContext.supervisorMatches.length > 0) && (
+                <div className="mt-4 border-t pt-3">
+                  <button
+                    onClick={() => setShowAi(!showAi)}
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                  >
+                    {showAi ? 'Hide' : 'Show'} AI recommendations ✨
+                  </button>
+                  {showAi && (
+                    <div className="mt-3 space-y-4">
+                      {aiContext.supervisorMatches.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                            AI supervisor match for this topic
+                          </p>
+                          <div className="space-y-1">
+                            {aiContext.supervisorMatches.map((m) => (
+                              <div key={m.supervisorId} className="flex items-center justify-between text-sm px-3 py-1.5 rounded-lg bg-gray-50 border">
+                                <span className="text-gray-700">
+                                  {m.name}
+                                  {m.supervisorId === aiContext.assignedSupervisorId && (
+                                    <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">assigned</span>
+                                  )}
+                                </span>
+                                <span className="text-xs text-gray-400">match {m.score}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {aiContext.topicHistory.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                            Students' AI topic explorations
+                          </p>
+                          <div className="space-y-1.5">
+                            {aiContext.topicHistory.slice(0, 3).map((t) => (
+                              <div key={t.id} className="text-xs px-3 py-2 rounded-lg bg-gray-50 border">
+                                <p className="text-gray-600">
+                                  <span className="font-medium text-gray-800">{t.studentName}</span> explored: {t.interests}
+                                </p>
+                                <p className="text-gray-400 mt-0.5 truncate">
+                                  {t.suggestions.map((s) => s.title).join(' · ')}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Decision buttons */}
+              {proposal.status === 'pending' && (
+                <div className="mt-4 border-t pt-4 space-y-3">
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    rows={2}
+                    placeholder="Feedback for the group (required for reject / request changes)..."
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                  />
+                  {reviewError && <p className="text-xs text-red-600">{reviewError}</p>}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => handleReview('approved')}
+                      disabled={reviewBusy}
+                      className="px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleReview('changes_requested')}
+                      disabled={reviewBusy}
+                      className="px-4 py-2 rounded-md bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+                    >
+                      Request changes
+                    </button>
+                    <button
+                      onClick={() => handleReview('rejected')}
+                      disabled={reviewBusy}
+                      className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Documents */}
           <div className="bg-white rounded-xl border shadow-sm p-5">
@@ -306,6 +470,45 @@ export default function PanelGradingPage({ params }: { params: Promise<{ id: str
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Result approval */}
+          <div className="bg-white rounded-xl border shadow-sm p-5">
+            <h2 className="font-semibold text-gray-800 mb-2">Final Result</h2>
+            {group.resultApproved ? (
+              <div className="space-y-3">
+                <p className="text-sm text-emerald-700 font-medium">✓ Result approved by the panel</p>
+                <button
+                  onClick={() => handleResultApproval(false)}
+                  disabled={approvalBusy}
+                  className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                >
+                  Revoke approval
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">
+                  Once the supervisor grade and at least one panel grade are in, a panel member
+                  approves the final result. Admin can only release grades for approved results.
+                </p>
+                <button
+                  onClick={() => handleResultApproval(true)}
+                  disabled={approvalBusy || !supervisorGrade || panelGrades.length === 0}
+                  className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+                >
+                  {approvalBusy ? 'Saving...' : 'Approve final result'}
+                </button>
+                {(!supervisorGrade || panelGrades.length === 0) && (
+                  <p className="text-[11px] text-gray-400">
+                    Waiting for: {!supervisorGrade && 'supervisor grade'}
+                    {!supervisorGrade && panelGrades.length === 0 && ' + '}
+                    {panelGrades.length === 0 && 'at least one panel grade'}
+                  </p>
+                )}
+              </div>
+            )}
+            {approvalError && <p className="text-xs text-red-600 mt-2">{approvalError}</p>}
           </div>
         </div>
       </div>

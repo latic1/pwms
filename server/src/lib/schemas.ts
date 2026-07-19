@@ -71,7 +71,7 @@ export const updateTaskStatusSchema = z.object({
 // ─── Proposals ────────────────────────────────────────────────────────────────
 
 export const reviewProposalSchema = z.object({
-  status:            z.enum(['approved', 'rejected'], { error: 'Status must be approved or rejected' }),
+  status:            z.enum(['approved', 'rejected', 'changes_requested'], { error: 'Status must be approved, rejected, or changes_requested' }),
   supervisorComment: z.string().max(2000).trim().optional(),
 })
 

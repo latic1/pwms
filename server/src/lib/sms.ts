@@ -81,12 +81,15 @@ export function smsNewUser(phone: string, name: string, email: string, tempPassw
 export function smsProposalDecision(
   members: { phone: string; name: string }[],
   proposalTitle: string,
-  status: 'approved' | 'rejected',
+  status: 'approved' | 'rejected' | 'changes_requested',
   comment?: string
 ) {
-  const template = status === 'approved'
-    ? 'Hello {$name}. Your group\'s proposal "{$title}" has been approved by your supervisor.'
-    : 'Hello {$name}. Your group\'s proposal "{$title}" was rejected. Feedback: {$comment}. Please revise and resubmit.'
+  const template =
+    status === 'approved'
+      ? 'Hello {$name}. Your group\'s proposal "{$title}" has been approved by the examination panel.'
+      : status === 'changes_requested'
+      ? 'Hello {$name}. The examination panel has requested changes to your group\'s proposal "{$title}". Feedback: {$comment}. Please revise and resubmit.'
+      : 'Hello {$name}. Your group\'s proposal "{$title}" was rejected by the examination panel. Feedback: {$comment}. Please revise and resubmit.'
 
   const destinations: SmsDestination[] = members
     .filter((m) => m.phone)

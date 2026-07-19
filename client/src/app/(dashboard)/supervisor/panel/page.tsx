@@ -56,6 +56,28 @@ export default function PanelDutyPage() {
                             <span className="text-amber-600">No final report yet</span>
                           )}
                         </p>
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          {g.proposalStatus === 'pending' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+                              Proposal awaiting panel review
+                            </span>
+                          )}
+                          {g.proposalStatus === 'changes_requested' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                              Proposal changes requested
+                            </span>
+                          )}
+                          {g.proposalStatus === 'approved' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-600">
+                              Proposal approved
+                            </span>
+                          )}
+                          {g.resultApproved && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                              ✓ Result approved
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {g.isOwnGroup ? (

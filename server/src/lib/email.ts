@@ -126,19 +126,29 @@ export function emailPasswordResetOtp(email: string, name: string, otp: string) 
 export function emailProposalDecision(
   members: { email: string; name: string }[],
   proposalTitle: string,
-  status: 'approved' | 'rejected',
+  status: 'approved' | 'rejected' | 'changes_requested',
   comment?: string
 ) {
-  const approved = status === 'approved'
+  const labels = {
+    approved:          { subject: 'approved',          title: 'Proposal Approved' },
+    rejected:          { subject: 'rejected',          title: 'Proposal Rejected' },
+    changes_requested: { subject: 'changes requested', title: 'Proposal Changes Requested' },
+  }[status]
+
   return sendEmailToMany(
     members,
-    `Proposal ${approved ? 'approved' : 'rejected'}: ${proposalTitle}`,
-    `Proposal ${approved ? 'Approved' : 'Rejected'}`,
-    (name) => approved
+    `Proposal ${labels.subject}: ${proposalTitle}`,
+    labels.title,
+    (name) => status === 'approved'
       ? `<p>Hello ${esc(name)},</p>
-         <p>Your group's proposal "<strong>${esc(proposalTitle)}</strong>" has been <strong style="color:#059669;">approved</strong> by your supervisor.</p>`
+         <p>Your group's proposal "<strong>${esc(proposalTitle)}</strong>" has been <strong style="color:#059669;">approved</strong> by the examination panel.</p>`
+      : status === 'changes_requested'
+      ? `<p>Hello ${esc(name)},</p>
+         <p>The examination panel has <strong style="color:#d97706;">requested changes</strong> to your group's proposal "<strong>${esc(proposalTitle)}</strong>".</p>
+         <p><strong>Feedback:</strong> ${esc(comment ?? 'See system for details')}</p>
+         <p>Please revise and resubmit.</p>`
       : `<p>Hello ${esc(name)},</p>
-         <p>Your group's proposal "<strong>${esc(proposalTitle)}</strong>" was <strong style="color:#dc2626;">rejected</strong>.</p>
+         <p>Your group's proposal "<strong>${esc(proposalTitle)}</strong>" was <strong style="color:#dc2626;">rejected</strong> by the examination panel.</p>
          <p><strong>Feedback:</strong> ${esc(comment ?? 'See system for details')}</p>
          <p>Please revise and resubmit.</p>`
   )

@@ -30,6 +30,8 @@ export interface Group {
   supervisorId: string | null
   panelId: string | null
   periodId: string | null
+  resultApproved: boolean
+  resultApprovedAt: string | null
   members: GroupMember[]
   supervisor: { id: string; name: string; email: string } | null
   panel: { id: string; name: string } | null
@@ -55,7 +57,7 @@ export interface Proposal {
   title: string
   abstract: string
   fileUrl: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'changes_requested'
   version: number
   supervisorComment?: string
   submittedAt: string
@@ -130,6 +132,24 @@ export interface MyPanelGroup {
   hasFinalReport: boolean
   myScore: number | null
   isOwnGroup: boolean
+  proposalStatus: 'pending' | 'approved' | 'rejected' | 'changes_requested' | null
+  proposalTitle: string | null
+  hasSupervisorGrade: boolean
+  panelGradeCount: number
+  resultApproved: boolean
+}
+
+/** AI context shown to a panel while reviewing a proposal */
+export interface AiReviewContext {
+  topicHistory: {
+    id: string
+    studentName: string
+    interests: string
+    suggestions: TopicSuggestion[]
+    createdAt: string
+  }[]
+  supervisorMatches: SupervisorMatch[]
+  assignedSupervisorId: string | null
 }
 
 export interface MyPanel {

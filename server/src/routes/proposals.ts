@@ -21,7 +21,7 @@ interface DbProposal {
   title: string
   abstract: string
   file_url: string | null
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'changes_requested'
   version: number
   supervisor_comment: string | null
   submitted_at: string
@@ -32,6 +32,7 @@ interface DbGroup {
   id: string
   leader_id: string
   supervisor_id: string | null
+  panel_id: string | null
   period_id: string | null
 }
 
@@ -39,12 +40,22 @@ interface DbGroup {
 
 async function assertLeader(groupId: string, userId: string): Promise<DbGroup | null> {
   const group = await queryOne<DbGroup>(
-    'SELECT id, leader_id, supervisor_id, period_id FROM groups WHERE id = $1',
+    'SELECT id, leader_id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
     [groupId]
   )
   if (!group) return null
   if (group.leader_id !== userId) return null
   return group
+}
+
+/** Is this user a member of the group's assigned examination panel? */
+async function isPanelMemberOfGroup(group: DbGroup, userId: string): Promise<boolean> {
+  if (!group.panel_id) return false
+  const m = await queryOne(
+    'SELECT 1 FROM panel_members WHERE panel_id = $1 AND user_id = $2',
+    [group.panel_id, userId]
+  )
+  return !!m
 }
 
 // ─── Helper — get proposal deadline for group's period ───────────────────────
@@ -118,7 +129,7 @@ router.get('/:groupId/history', async (req: Request, res: Response): Promise<voi
   const groupId = p(req.params.groupId)
 
   const group = await queryOne<DbGroup>(
-    'SELECT id, leader_id, supervisor_id FROM groups WHERE id = $1',
+    'SELECT id, leader_id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
     [groupId]
   )
   if (!group) {
@@ -137,7 +148,7 @@ router.get('/:groupId/history', async (req: Request, res: Response): Promise<voi
       return
     }
   }
-  if (role === 'supervisor' && group.supervisor_id !== sub) {
+  if (role === 'supervisor' && group.supervisor_id !== sub && !(await isPanelMemberOfGroup(group, sub))) {
     res.status(403).json({ error: 'Access denied' })
     return
   }
@@ -157,7 +168,7 @@ router.get('/:groupId/latest', async (req: Request, res: Response): Promise<void
   const groupId = p(req.params.groupId)
 
   const group = await queryOne<DbGroup>(
-    'SELECT id, leader_id, supervisor_id FROM groups WHERE id = $1',
+    'SELECT id, leader_id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
     [groupId]
   )
   if (!group) {
@@ -175,7 +186,7 @@ router.get('/:groupId/latest', async (req: Request, res: Response): Promise<void
       return
     }
   }
-  if (role === 'supervisor' && group.supervisor_id !== sub) {
+  if (role === 'supervisor' && group.supervisor_id !== sub && !(await isPanelMemberOfGroup(group, sub))) {
     res.status(403).json({ error: 'Access denied' })
     return
   }
@@ -193,32 +204,35 @@ router.get('/:groupId/latest', async (req: Request, res: Response): Promise<void
   res.json(formatProposal(proposal))
 })
 
-// ─── PATCH /proposals/:groupId/review — supervisor approve/reject ─────────────
+// ─── PATCH /proposals/:groupId/review — panel approve/reject/request changes ──
 
-router.patch('/:groupId/review', requireRole('supervisor'), validate(reviewProposalSchema), async (req: Request, res: Response): Promise<void> => {
+router.patch('/:groupId/review', requireRole('supervisor', 'admin'), validate(reviewProposalSchema), async (req: Request, res: Response): Promise<void> => {
   const groupId = p(req.params.groupId)
-  const { status, comment } = req.body
-  const supervisorId = req.user!.sub
+  const { status, supervisorComment } = req.body
+  const { sub, role } = req.user!
+  const comment: string | undefined = supervisorComment
 
-  if (!['approved', 'rejected'].includes(status)) {
-    res.status(400).json({ error: 'status must be "approved" or "rejected"' })
-    return
-  }
-  if (status === 'rejected' && !comment?.trim()) {
-    res.status(400).json({ error: 'A comment is required when rejecting a proposal' })
+  if (status !== 'approved' && !comment?.trim()) {
+    res.status(400).json({ error: 'A comment is required when rejecting or requesting changes' })
     return
   }
 
   const group = await queryOne<DbGroup>(
-    'SELECT id, supervisor_id FROM groups WHERE id = $1',
+    'SELECT id, leader_id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
     [groupId]
   )
   if (!group) {
     res.status(404).json({ error: 'Group not found' })
     return
   }
-  if (group.supervisor_id !== supervisorId) {
-    res.status(403).json({ error: 'You are not the supervisor of this group' })
+
+  // Proposals are decided by the group's examination panel (or an admin)
+  if (role !== 'admin' && !(await isPanelMemberOfGroup(group, sub))) {
+    res.status(403).json({
+      error: group.panel_id
+        ? 'Only members of this group\'s examination panel can review its proposal'
+        : 'This group has no examination panel assigned yet — ask an admin to assign one',
+    })
     return
   }
 
@@ -244,7 +258,7 @@ router.patch('/:groupId/review', requireRole('supervisor'), validate(reviewPropo
     [status, comment?.trim() ?? null, proposal.id]
   )
 
-  await audit(supervisorId, `proposal.${status}`, 'proposal', proposal.id, {
+  await audit(sub, `proposal.${status}`, 'proposal', proposal.id, {
     groupId, version: proposal.version, comment: comment?.trim(),
   })
 
@@ -259,20 +273,22 @@ router.patch('/:groupId/review', requireRole('supervisor'), validate(reviewPropo
   smsProposalDecision(
     members.filter((m) => m.phone).map((m) => ({ name: m.name, phone: m.phone! })),
     proposal.title,
-    status,
+    status as 'approved' | 'rejected' | 'changes_requested',
     comment?.trim()
   )
   emailProposalDecision(
     members.map((m) => ({ name: m.name, email: m.email })),
     proposal.title,
-    status,
+    status as 'approved' | 'rejected' | 'changes_requested',
     comment?.trim()
   )
 
   res.json(formatProposal(updated))
 })
 
-// ─── GET /proposals/pending — all pending proposals (supervisor/admin) ─────────
+// ─── GET /proposals — proposals visible to the caller (supervisor/admin) ──────
+// Supervisors see proposals of groups they supervise plus groups examined by
+// a panel they sit on; admins see everything.
 
 router.get('/', requireRole('supervisor', 'admin'), async (req: Request, res: Response): Promise<void> => {
   const { role, sub } = req.user!
@@ -281,7 +297,10 @@ router.get('/', requireRole('supervisor', 'admin'), async (req: Request, res: Re
     `SELECT p.*, g.name AS group_name
      FROM proposals p
      JOIN groups g ON g.id = p.group_id
-     ${role === 'supervisor' ? 'WHERE g.supervisor_id = $1' : ''}
+     ${role === 'supervisor'
+       ? `WHERE g.supervisor_id = $1
+          OR g.panel_id IN (SELECT panel_id FROM panel_members WHERE user_id = $1)`
+       : ''}
      ORDER BY p.submitted_at DESC`,
     role === 'supervisor' ? [sub] : []
   )

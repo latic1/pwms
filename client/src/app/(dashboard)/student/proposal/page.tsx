@@ -9,15 +9,17 @@ import { API_BASE } from '@/lib/api'
 import type { Proposal } from '@/types'
 
 const statusStyles: Record<Proposal['status'], string> = {
-  pending:  'bg-yellow-100 text-yellow-700',
-  approved: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
+  pending:           'bg-yellow-100 text-yellow-700',
+  approved:          'bg-green-100 text-green-700',
+  rejected:          'bg-red-100 text-red-700',
+  changes_requested: 'bg-amber-100 text-amber-700',
 }
 
 const statusLabels: Record<Proposal['status'], string> = {
-  pending:  'Under Review',
-  approved: 'Approved',
-  rejected: 'Rejected',
+  pending:           'Under Panel Review',
+  approved:          'Approved',
+  rejected:          'Rejected',
+  changes_requested: 'Changes Requested',
 }
 
 export default function ProposalPage() {
@@ -125,7 +127,7 @@ export default function ProposalPage() {
                 }}
                 className="ml-auto text-sm px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700 transition-colors"
               >
-                {showForm ? 'Cancel' : proposal.status === 'rejected' ? 'Resubmit' : 'Edit & Resubmit'}
+                {showForm ? 'Cancel' : (proposal.status === 'rejected' || proposal.status === 'changes_requested') ? 'Resubmit' : 'Edit & Resubmit'}
               </button>
             )}
           </div>

@@ -6,13 +6,14 @@ import { useGroups, useGroup } from '@/hooks/useGroup'
 import { useProposal } from '@/hooks/useProposal'
 import { useTasks } from '@/hooks/useTasks'
 import { useDocuments } from '@/hooks/useDocuments'
-import api, { API_BASE } from '@/lib/api'
+import { API_BASE } from '@/lib/api'
 import type { Proposal } from '@/types'
 
 const proposalStatusStyles: Record<Proposal['status'], string> = {
-  pending:  'bg-yellow-100 text-yellow-700',
-  approved: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
+  pending:           'bg-yellow-100 text-yellow-700',
+  approved:          'bg-green-100 text-green-700',
+  rejected:          'bg-red-100 text-red-700',
+  changes_requested: 'bg-amber-100 text-amber-700',
 }
 
 const taskStatusStyles: Record<string, string> = {
@@ -27,32 +28,6 @@ function GroupDetail({ groupId }: { groupId: string }) {
   const { proposal }  = useProposal(groupId)
   const { tasks }     = useTasks(groupId)
   const { documents } = useDocuments(groupId)
-  const [reviewing,   setReviewing]  = useState(false)
-  const [decision,    setDecision]   = useState<'approved' | 'rejected' | null>(null)
-  const [comment,     setComment]    = useState('')
-  const [submitting,  setSubmitting] = useState(false)
-  const [reviewDone,  setReviewDone] = useState(false)
-  const [reviewError, setReviewError] = useState('')
-
-  async function handleReview(e: React.FormEvent) {
-    e.preventDefault()
-    if (!decision || !proposal) return
-    setSubmitting(true)
-    setReviewError('')
-    try {
-      await api.patch(`/proposals/${groupId}/review`, {
-        status: decision,
-        supervisorComment: comment || undefined,
-      })
-      setReviewDone(true)
-      setReviewing(false)
-    } catch (err: any) {
-      setReviewError(err?.response?.data?.error ?? 'Failed to submit review.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   if (!group) return <div className="text-sm text-gray-400 p-4">Loading...</div>
 
   return (
@@ -103,59 +78,12 @@ function GroupDetail({ groupId }: { groupId: string }) {
               >
                 Download PDF
               </a>
-              {proposal.status === 'pending' && !reviewDone && (
-                <button
-                  onClick={() => setReviewing(!reviewing)}
-                  className="text-xs px-3 py-1 rounded-md bg-gray-900 text-white hover:bg-gray-700"
-                >
-                  {reviewing ? 'Cancel' : 'Review'}
-                </button>
-              )}
-              {reviewDone && (
-                <span className="text-xs text-green-600 font-medium">Review submitted</span>
+              {proposal.status === 'pending' && (
+                <span className="text-xs text-gray-400">
+                  Awaiting examination panel review
+                </span>
               )}
             </div>
-
-            {reviewing && (
-              <form onSubmit={handleReview} className="space-y-3 border-t pt-3">
-                <div className="flex gap-2">
-                  {(['approved', 'rejected'] as const).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setDecision(d)}
-                      className={`flex-1 py-2 rounded-lg border-2 text-xs font-medium capitalize transition-colors ${
-                        decision === d
-                          ? d === 'approved'
-                            ? 'border-green-500 bg-green-50 text-green-700'
-                            : 'border-red-500 bg-red-50 text-red-700'
-                          : 'border-gray-200 text-gray-500 hover:border-gray-400'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  required={decision === 'rejected'}
-                  placeholder={decision === 'rejected' ? 'Feedback required for rejection...' : 'Optional feedback...'}
-                  rows={3}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
-                />
-                {reviewError && <p className="text-xs text-red-600">{reviewError}</p>}
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={!decision || submitting}
-                    className="px-4 py-2 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Review'}
-                  </button>
-                </div>
-              </form>
-            )}
           </div>
         </div>
       )}

@@ -93,13 +93,26 @@ router.get('/mine', requireRole('supervisor'), async (req: Request, res: Respons
         member_count: string
         my_score: string | null
         has_final_report: boolean
+        proposal_status: string | null
+        proposal_title: string | null
+        has_supervisor_grade: boolean
+        panel_grade_count: string
+        result_approved_at: string | null
       }>(
-        `SELECT g.id, g.name, g.supervisor_id,
+        `SELECT g.id, g.name, g.supervisor_id, g.result_approved_at,
                 (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id)   AS member_count,
                 (SELECT gr.score FROM grades gr
                   WHERE gr.group_id = g.id AND gr.grader_id = $2)                  AS my_score,
                 EXISTS (SELECT 1 FROM documents d
-                  WHERE d.group_id = g.id AND d.type = 'final_report')             AS has_final_report
+                  WHERE d.group_id = g.id AND d.type = 'final_report')             AS has_final_report,
+                (SELECT p.status::text FROM proposals p
+                  WHERE p.group_id = g.id ORDER BY p.version DESC LIMIT 1)         AS proposal_status,
+                (SELECT p.title FROM proposals p
+                  WHERE p.group_id = g.id ORDER BY p.version DESC LIMIT 1)         AS proposal_title,
+                EXISTS (SELECT 1 FROM grades gr
+                  WHERE gr.group_id = g.id AND gr.grader_role = 'supervisor')      AS has_supervisor_grade,
+                (SELECT COUNT(*) FROM grades gr
+                  WHERE gr.group_id = g.id AND gr.grader_role = 'panel')           AS panel_grade_count
          FROM groups g
          WHERE g.panel_id = $1
          ORDER BY g.name`,
@@ -110,13 +123,18 @@ router.get('/mine', requireRole('supervisor'), async (req: Request, res: Respons
         id:   panel.id,
         name: panel.name,
         groups: groups.map((g) => ({
-          id:             g.id,
-          name:           g.name,
-          memberCount:    parseInt(g.member_count),
-          hasFinalReport: g.has_final_report,
-          myScore:        g.my_score != null ? parseFloat(g.my_score) : null,
+          id:                 g.id,
+          name:               g.name,
+          memberCount:        parseInt(g.member_count),
+          hasFinalReport:     g.has_final_report,
+          myScore:            g.my_score != null ? parseFloat(g.my_score) : null,
           // A member can't panel-grade a group they supervise
-          isOwnGroup:     g.supervisor_id === sub,
+          isOwnGroup:         g.supervisor_id === sub,
+          proposalStatus:     g.proposal_status,
+          proposalTitle:      g.proposal_title,
+          hasSupervisorGrade: g.has_supervisor_grade,
+          panelGradeCount:    parseInt(g.panel_grade_count),
+          resultApproved:     g.result_approved_at != null,
         })),
       }
     })

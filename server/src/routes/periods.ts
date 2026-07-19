@@ -157,6 +157,25 @@ router.patch('/:id/release-grades', adminOnly, async (req: Request, res: Respons
     return
   }
 
+  // Results must be approved by the examination panel before release
+  if (gradesReleased) {
+    const unapproved = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) AS count
+       FROM groups g
+       WHERE g.period_id = $1
+         AND g.result_approved_at IS NULL
+         AND EXISTS (SELECT 1 FROM grades gr WHERE gr.group_id = g.id)`,
+      [id]
+    )
+    const n = parseInt(unapproved?.count ?? '0')
+    if (n > 0) {
+      res.status(409).json({
+        error: `Cannot release grades: ${n} graded group${n !== 1 ? 's' : ''} still awaiting panel result approval`,
+      })
+      return
+    }
+  }
+
   const [updated] = await query<DbPeriod>(
     'UPDATE academic_periods SET grades_released = $1 WHERE id = $2 RETURNING *',
     [gradesReleased, id]
