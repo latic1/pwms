@@ -96,6 +96,14 @@ function GroupDetail({ groupId, onClose }: { groupId: string; onClose: () => voi
             {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
           </div>
 
+          {/* Examination panel */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Examination Panel</p>
+            <span className="text-sm text-gray-700">
+              {group.panel ? group.panel.name : <span className="text-gray-400">Not assigned — manage from the Panels page</span>}
+            </span>
+          </div>
+
           {/* Members */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">

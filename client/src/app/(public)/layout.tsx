@@ -9,7 +9,6 @@ const roleHome: Record<Role, string> = {
   student:    '/student',
   supervisor: '/supervisor',
   admin:      '/admin',
-  examiner:   '/examiner',
 }
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {

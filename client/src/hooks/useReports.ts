@@ -5,10 +5,10 @@ const fetcher = (url: string) => api.get(url).then((r) => r.data)
 
 export interface ReportSummary {
   groups:    { total: number; withSupervisor: number; withoutSupervisor: number }
-  users:     { students: number; supervisors: number; admins: number; examiners: number }
+  users:     { students: number; supervisors: number; admins: number; panels: number }
   proposals: { pending: number; approved: number; rejected: number; none: number }
   tasks:     { total: number; done: number }
-  grades:    { supervisorGraded: number; examinerGraded: number; total: number }
+  grades:    { supervisorGraded: number; panelGraded: number; total: number }
   documents: { total: number; finalReports: number }
 }
 
@@ -17,12 +17,14 @@ export interface GroupReport {
   groupName:      string
   createdAt:      string
   supervisorName: string | null
+  panelName:      string | null
   memberCount:    number
   proposal: { title: string | null; status: string; version: number } | null
   tasks:          { total: number; done: number }
   hasFinalReport: boolean
   supervisorScore: number | null
-  examinerScore:   number | null
+  panelScore:      number | null
+  panelGradeCount: number
   finalScore:      number | null
   docCount:        number
 }

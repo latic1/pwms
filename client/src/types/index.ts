@@ -1,4 +1,4 @@
-export type Role = 'student' | 'supervisor' | 'admin' | 'examiner'
+export type Role = 'student' | 'supervisor' | 'admin'
 
 export interface User {
   id: string
@@ -28,9 +28,11 @@ export interface Group {
   inviteCode: string
   leaderId: string
   supervisorId: string | null
+  panelId: string | null
   periodId: string | null
   members: GroupMember[]
   supervisor: { id: string; name: string; email: string } | null
+  panel: { id: string; name: string } | null
   createdAt: string
 }
 
@@ -41,6 +43,7 @@ export interface GroupSummary {
   inviteCode: string
   leaderId: string
   supervisorId: string | null
+  panelId: string | null
   periodId: string | null
   createdAt: string
   memberCount: number
@@ -102,11 +105,37 @@ export interface Grade {
   id: string
   groupId: string
   graderId: string
-  graderRole: 'supervisor' | 'examiner'
+  graderRole: 'supervisor' | 'panel'
   score: number
   rubric: Record<string, number>
   feedback: string | null
   gradedAt: string
+}
+
+// ─── Panels ──────────────────────────────────────────────────────────────────
+
+export interface Panel {
+  id: string
+  name: string
+  createdAt: string
+  members: { id: string; name: string; email: string }[]
+  groups: { id: string; name: string; supervisorId: string | null }[]
+}
+
+/** A group shown on a panel member's grading list */
+export interface MyPanelGroup {
+  id: string
+  name: string
+  memberCount: number
+  hasFinalReport: boolean
+  myScore: number | null
+  isOwnGroup: boolean
+}
+
+export interface MyPanel {
+  id: string
+  name: string
+  groups: MyPanelGroup[]
 }
 
 export interface TopicSuggestion {

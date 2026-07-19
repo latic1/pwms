@@ -41,7 +41,7 @@ const docTypeStyles: Record<string, string> = {
   supporting:      'bg-gray-100 text-gray-600',
 }
 
-export default function SubmissionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function PanelGradingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: groupId } = use(params)
 
   const { group }     = useGroup(groupId)
@@ -55,6 +55,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
   const [error,    setError]    = useState('')
 
   const supervisorGrade = grades.find((g) => g.graderRole === 'supervisor') ?? null
+  const panelGrades     = grades.filter((g) => g.graderRole === 'panel')
 
   const runningTotal = rubricCriteria.reduce((sum, c) => sum + (scores[c.key] ?? 0), 0)
   const grade = getGrade(runningTotal)
@@ -89,8 +90,8 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-400">
-        <Link href="/examiner/submissions" className="hover:text-gray-700 transition-colors">
-          Submissions
+        <Link href="/supervisor/panel" className="hover:text-gray-700 transition-colors">
+          Panel Duty
         </Link>
         <span>/</span>
         <span className="text-gray-600">{group.name}</span>
@@ -163,9 +164,9 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
 
           {/* Grading form */}
           <div className="bg-white rounded-xl border shadow-sm p-6">
-            <h2 className="font-semibold text-gray-800 mb-1">Your Examination Grade</h2>
+            <h2 className="font-semibold text-gray-800 mb-1">Your Panel Assessment</h2>
             <p className="text-sm text-gray-500 mb-5">
-              Score each criterion independently of the supervisor's assessment.
+              Score each criterion independently. The panel score is the average of all panel members' grades.
             </p>
 
             {myGrade ? (
@@ -203,7 +204,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
                         max={c.max}
                         value={scores[c.key] ?? 0}
                         onChange={(e) => handleScore(c.key, Number(e.target.value), c.max)}
-                        className="flex-1 accent-orange-500"
+                        className="flex-1 accent-indigo-500"
                       />
                       <input
                         type="number"
@@ -217,7 +218,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
                       <div
-                        className="bg-orange-400 h-1 rounded-full transition-all"
+                        className="bg-indigo-400 h-1 rounded-full transition-all"
                         style={{ width: `${((scores[c.key] ?? 0) / c.max) * 100}%` }}
                       />
                     </div>
@@ -237,7 +238,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Examiner Feedback</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Panel Feedback</label>
                   <textarea
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
@@ -255,7 +256,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
                     disabled={saving}
                     className="px-5 py-2 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-700 transition-colors disabled:opacity-50"
                   >
-                    {saving ? 'Submitting...' : 'Submit Examination Grade'}
+                    {saving ? 'Submitting...' : 'Submit Panel Grade'}
                   </button>
                 </div>
               </form>
@@ -263,8 +264,8 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
 
-        {/* Right column — members */}
-        <div>
+        {/* Right column */}
+        <div className="space-y-5">
           <div className="bg-white rounded-xl border shadow-sm p-5">
             <h2 className="font-semibold text-gray-800 mb-3">Group Members</h2>
             <ul className="space-y-3">
@@ -285,6 +286,26 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* Panel progress */}
+          <div className="bg-white rounded-xl border shadow-sm p-5">
+            <h2 className="font-semibold text-gray-800 mb-3">Panel Progress</h2>
+            {panelGrades.length === 0 ? (
+              <p className="text-sm text-gray-400">No panel grades submitted yet.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">
+                  {panelGrades.length} panel grade{panelGrades.length !== 1 ? 's' : ''} submitted
+                </p>
+                <p className="text-sm text-gray-600">
+                  Panel average:{' '}
+                  <span className="font-bold text-gray-900">
+                    {(panelGrades.reduce((s, g) => s + g.score, 0) / panelGrades.length).toFixed(1)}/100
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

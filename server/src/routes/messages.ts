@@ -38,7 +38,6 @@ function formatMessage(m: DbMessageWithSender) {
 
 async function assertThreadAccess(groupId: string, userId: string, role: string): Promise<boolean> {
   if (role === 'admin') return true
-  if (role === 'examiner') return false // examiners have no messaging access
 
   if (role === 'supervisor') {
     const g = await queryOne(

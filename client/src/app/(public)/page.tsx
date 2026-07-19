@@ -13,7 +13,6 @@ const roleHome: Record<Role, string> = {
   student:    '/student',
   supervisor: '/supervisor',
   admin:      '/admin',
-  examiner:   '/examiner',
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -176,7 +175,7 @@ export default function LandingPage() {
         <div className="text-center mb-14">
           <h2 className="text-3xl font-bold text-gray-900">Everything in one system</h2>
           <p className="text-gray-500 mt-2 max-w-xl mx-auto">
-            Designed for students, supervisors, examiners, and admin staff.
+            Designed for students, supervisors, examination panels, and admin staff.
           </p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -246,7 +245,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-4">New to FYP-WMS?</h2>
             <p className="text-gray-500 mb-6 leading-relaxed">
-              We've built step-by-step guides for every role — students, supervisors, and examiners.
+              We've built step-by-step guides for every role — students, supervisors, and examination panels.
               Get up to speed in minutes, not days.
             </p>
             <div className="space-y-3">
@@ -254,7 +253,7 @@ export default function LandingPage() {
                 'Form or join a group with a single invite code',
                 'Submit proposals and track supervisor feedback',
                 'Manage tasks, documents, and messages in one place',
-                'Get graded fairly by both supervisor and examiner',
+                'Get graded fairly by your supervisor and an examination panel',
               ].map((item) => (
                 <div key={item} className="flex items-start gap-2 text-sm text-gray-600">
                   <svg className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -309,7 +308,7 @@ const features = [
   { icon: '✅', bg: 'bg-green-50',   title: 'Task Tracking',      desc: 'Break down your project into tasks, assign them to members, and track progress visually.' },
   { icon: '📁', bg: 'bg-yellow-50',  title: 'Document Repository',desc: 'Upload progress reports, final documents, and supporting files — all in one place.' },
   { icon: '💬', bg: 'bg-pink-50',    title: 'Group Messaging',    desc: 'Communicate directly with your supervisor and group in a dedicated message thread.' },
-  { icon: '🏆', bg: 'bg-orange-50',  title: 'Fair Grading',       desc: 'Dual grading by both supervisor and examiner with a transparent rubric-based system.' },
+  { icon: '🏆', bg: 'bg-orange-50',  title: 'Fair Grading',       desc: 'Dual grading by the supervisor and an examination panel with a transparent rubric-based system.' },
 ]
 
 const steps = [

@@ -80,12 +80,16 @@ function formatDoc(d: DbDocument) {
 async function assertMember(groupId: string, userId: string, role: string): Promise<boolean> {
   if (role === 'admin') return true
   if (role === 'supervisor') {
+    // Own supervised group, or a group examined by a panel they sit on
     const g = await queryOne('SELECT id FROM groups WHERE id = $1 AND supervisor_id = $2', [groupId, userId])
-    return !!g
-  }
-  if (role === 'examiner') {
-    // Examiners can read documents of groups with a final_report submission
-    return true
+    if (g) return true
+    const pm = await queryOne(
+      `SELECT 1 FROM groups g
+       JOIN panel_members pm ON pm.panel_id = g.panel_id
+       WHERE g.id = $1 AND pm.user_id = $2`,
+      [groupId, userId]
+    )
+    return !!pm
   }
   const m = await queryOne(
     'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
@@ -131,10 +135,14 @@ router.post('/:groupId', upload.single('file'), async (req: Request, res: Respon
     return
   }
 
-  // Only group members (students) and admins can upload
-  if (role === 'examiner') {
-    res.status(403).json({ error: 'Examiners cannot upload documents' })
-    return
+  // Panel members get read-only access — a supervisor can only upload to a
+  // group they actually supervise
+  if (role === 'supervisor') {
+    const own = await queryOne('SELECT id FROM groups WHERE id = $1 AND supervisor_id = $2', [groupId, sub])
+    if (!own) {
+      res.status(403).json({ error: 'Panel members cannot upload documents' })
+      return
+    }
   }
 
   const ok = await assertMember(groupId, sub, role)

@@ -59,7 +59,7 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
     return
   }
 
-  const validRoles = ['student', 'supervisor', 'admin', 'examiner']
+  const validRoles = ['student', 'supervisor', 'admin']
   if (!validRoles.includes(role)) {
     res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` })
     return

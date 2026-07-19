@@ -17,7 +17,6 @@ const roleColors: Record<string, string> = {
   admin:      'text-purple-600',
   supervisor: 'text-green-600',
   student:    'text-blue-600',
-  examiner:   'text-orange-600',
 }
 
 function formatTimestamp(iso: string) {

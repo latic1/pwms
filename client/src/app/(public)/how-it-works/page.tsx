@@ -8,7 +8,7 @@ import Link from 'next/link'
 const roles = [
   { id: 'student',    label: 'Student',    icon: '🎓', color: 'bg-blue-600' },
   { id: 'supervisor', label: 'Supervisor', icon: '👨‍🏫', color: 'bg-emerald-600' },
-  { id: 'examiner',   label: 'Examiner',   icon: '🔍', color: 'bg-amber-600' },
+  { id: 'panel',      label: 'Panel',      icon: '🔍', color: 'bg-amber-600' },
   { id: 'admin',      label: 'Admin',      icon: '⚙️',  color: 'bg-violet-600' },
 ]
 
@@ -20,7 +20,7 @@ const walkthroughs: Record<string, { step: number; title: string; desc: string; 
     { step: 4, title: 'Track tasks',               desc: 'Under Tasks, you\'ll see work items assigned to your group. Move them through Pending → In Progress → Under Review → Done as you complete them.' },
     { step: 5, title: 'Upload documents',          desc: 'Use the Documents page to upload progress reports, your final report, and any supporting files (max 20 MB each).' },
     { step: 6, title: 'Communicate',               desc: 'Use Messages to stay in contact with your supervisor and group. All messages are threaded by group for clarity.' },
-    { step: 7, title: 'Submit final report',       desc: 'When your project is complete, the group leader uploads the final report. This triggers examiner grading.' },
+    { step: 7, title: 'Submit final report',       desc: 'When your project is complete, the group leader uploads the final report so your examination panel can grade it.' },
   ],
   supervisor: [
     { step: 1, title: 'Sign in',                   desc: 'Log in with your faculty credentials to access your supervisor dashboard.' },
@@ -30,18 +30,18 @@ const walkthroughs: Record<string, { step: number; title: string; desc: string; 
     { step: 5, title: 'Assign and manage tasks',    desc: 'Create tasks for your groups from the group detail view. Assign them to specific members with due dates.' },
     { step: 6, title: 'Grade your groups',          desc: 'Under Grading, submit a score (0–100) and written feedback for each group you supervise. You can update your grade until grades are released by admin.' },
   ],
-  examiner: [
-    { step: 1, title: 'Sign in',                   desc: 'Log in with your faculty credentials to access the examiner portal.' },
-    { step: 2, title: 'Browse submissions',         desc: 'The Submissions page lists all project groups. Click any group to see their submitted documents.' },
-    { step: 3, title: 'Review documents',           desc: 'Download and review the final report, supporting materials, and any other files uploaded by the group.' },
-    { step: 4, title: 'View supervisor\'s grade',  desc: 'The group detail page shows the supervisor\'s score and feedback so you can form an independent assessment.' },
-    { step: 5, title: 'Submit your examination grade', desc: 'Fill in the rubric (problem definition, methodology, implementation, etc.) to arrive at a total score. Add written feedback and submit.', tip: 'Your grade is independent of the supervisor\'s. You can update it before admin releases grades.' },
+  panel: [
+    { step: 1, title: 'Get assigned to a panel',   desc: 'Examination panels are groups of supervisors. An admin creates panels and assigns supervisors to them, then assigns each student group to a panel.' },
+    { step: 2, title: 'Open Panel Duty',            desc: 'As a supervisor on a panel, the Panel Duty page lists every group your panel examines, with grading status for each.' },
+    { step: 3, title: 'Review documents',           desc: 'Open a group to download and review the final report, supporting materials, and any other files uploaded by the group.' },
+    { step: 4, title: 'View supervisor\'s grade',  desc: 'The group detail page shows the supervising lecturer\'s score and feedback so you can form an independent assessment.' },
+    { step: 5, title: 'Submit your panel grade',    desc: 'Fill in the rubric (problem definition, methodology, implementation, etc.) to arrive at a total score. The panel score is the average of all panel members\' grades.', tip: 'You cannot panel-grade a group you supervise — the system blocks the conflict of interest automatically.' },
   ],
   admin: [
     { step: 1, title: 'Sign in',                   desc: 'Log in as admin to access the full management dashboard.' },
     { step: 2, title: 'Manage academic periods',    desc: 'Create and configure academic periods (cohort years) with deadlines for group formation, proposals, and submissions. Release grades when ready.' },
-    { step: 3, title: 'Register users',             desc: 'Add new students, supervisors, and examiners from the Users page. Set their initial passwords and roles.' },
-    { step: 4, title: 'Manage groups',              desc: 'View all groups, assign supervisors, change group leaders, or remove members from the Groups page.' },
+    { step: 3, title: 'Register users',             desc: 'Add new students and supervisors from the Users page. Set their initial passwords and roles.' },
+    { step: 4, title: 'Manage groups and panels',   desc: 'View all groups, assign supervisors and examination panels, change group leaders, or remove members. Panels — groups of supervisors that grade projects — are managed from the Panels page.' },
     { step: 5, title: 'Post announcements',         desc: 'Use the Announcements page to publish important dates and notices. They appear as banners on the public landing page.' },
     { step: 6, title: 'Monitor audit log',          desc: 'The Audit Log records every significant action in the system — group creation, proposal submissions, grade changes — for accountability.' },
   ],
@@ -70,7 +70,7 @@ const faqs = [
   },
   {
     q: 'Who can see my documents?',
-    a: 'Your uploaded documents are visible to your group members, your supervisor, examiners, and admins. They are not public.',
+    a: 'Your uploaded documents are visible to your group members, your supervisor, your examination panel, and admins. They are not public.',
   },
   {
     q: 'I forgot my password. What do I do?',

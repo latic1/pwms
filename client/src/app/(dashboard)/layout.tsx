@@ -21,7 +21,6 @@ function usePageTitle(): string {
     student:    'Dashboard',
     supervisor: 'Dashboard',
     admin:      'Dashboard',
-    examiner:   'Dashboard',
     group:      'My Group',
     proposal:   'Proposal',
     tasks:      'Tasks',
@@ -35,6 +34,8 @@ function usePageTitle(): string {
     'audit-log':     'Audit Log',
     'announcements': 'Announcements',
     submissions:     'Submissions',
+    panels:          'Panels',
+    panel:           'Panel Duty',
   }
 
   return labels[segment] ?? segment.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())

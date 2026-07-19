@@ -5,7 +5,7 @@ const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'dev_refresh_secret'
 const ACCESS_TTL     = process.env.JWT_EXPIRES_IN     ?? '15m'
 const REFRESH_TTL    = '7d'
 
-export type UserRole = 'student' | 'supervisor' | 'admin' | 'examiner'
+export type UserRole = 'student' | 'supervisor' | 'admin'
 
 export interface JwtPayload {
   sub: string      // user id

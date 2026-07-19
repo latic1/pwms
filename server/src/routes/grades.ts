@@ -16,7 +16,7 @@ interface DbGrade {
   id: string
   group_id: string
   grader_id: string
-  grader_role: 'supervisor' | 'examiner'
+  grader_role: 'supervisor' | 'panel'
   score: string       // numeric comes back as string from pg
   rubric: Record<string, number>
   feedback: string | null
@@ -26,7 +26,18 @@ interface DbGrade {
 interface DbGroup {
   id: string
   supervisor_id: string | null
+  panel_id: string | null
   period_id: string | null
+}
+
+/** Is this supervisor a member of the group's assigned panel? */
+async function isPanelMember(group: DbGroup, userId: string): Promise<boolean> {
+  if (!group.panel_id) return false
+  const m = await queryOne(
+    'SELECT 1 FROM panel_members WHERE panel_id = $1 AND user_id = $2',
+    [group.panel_id, userId]
+  )
+  return !!m
 }
 
 function formatGrade(g: DbGrade) {
@@ -42,15 +53,15 @@ function formatGrade(g: DbGrade) {
   }
 }
 
-// ─── POST /grades/:groupId — submit a grade (supervisor or examiner) ──────────
+// ─── POST /grades/:groupId — submit a grade (group supervisor or panel member) ─
 
 router.post(
   '/:groupId',
-  requireRole('supervisor', 'examiner'),
+  requireRole('supervisor'),
   validate(submitGradeSchema),
   async (req: Request, res: Response): Promise<void> => {
     const groupId = p(req.params.groupId)
-    const { sub, role } = req.user!
+    const { sub } = req.user!
     const { score, rubric, feedback } = req.body
 
     if (score === undefined || score === null) {
@@ -65,7 +76,7 @@ router.post(
     }
 
     const group = await queryOne<DbGroup>(
-      'SELECT id, supervisor_id, period_id FROM groups WHERE id = $1',
+      'SELECT id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
       [groupId]
     )
     if (!group) {
@@ -73,9 +84,15 @@ router.post(
       return
     }
 
-    // Supervisor must be assigned to this group
-    if (role === 'supervisor' && group.supervisor_id !== sub) {
-      res.status(403).json({ error: 'You are not the supervisor of this group' })
+    // In what capacity is this supervisor grading? Their own supervised group
+    // → supervisor grade; a member of the group's assigned panel → panel grade.
+    let graderRole: 'supervisor' | 'panel'
+    if (group.supervisor_id === sub) {
+      graderRole = 'supervisor'
+    } else if (await isPanelMember(group, sub)) {
+      graderRole = 'panel'
+    } else {
+      res.status(403).json({ error: 'You are neither the supervisor of this group nor on its examination panel' })
       return
     }
 
@@ -105,7 +122,7 @@ router.post(
       [
         groupId,
         sub,
-        role,
+        graderRole,
         numScore,
         rubric ? JSON.stringify(rubric) : '{}',
         feedback?.trim() ?? null,
@@ -113,7 +130,7 @@ router.post(
     )
 
     await audit(sub, 'grade.submitted', 'group', groupId, {
-      graderRole: role, score: numScore,
+      graderRole, score: numScore,
     })
 
     res.status(201).json(formatGrade(grade))
@@ -127,7 +144,7 @@ router.get('/:groupId', async (req: Request, res: Response): Promise<void> => {
   const { sub, role } = req.user!
 
   const group = await queryOne<DbGroup>(
-    'SELECT id, supervisor_id, period_id FROM groups WHERE id = $1',
+    'SELECT id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
     [groupId]
   )
   if (!group) {
@@ -161,8 +178,8 @@ router.get('/:groupId', async (req: Request, res: Response): Promise<void> => {
     }
   }
 
-  // Supervisor can only see their group's grades
-  if (role === 'supervisor' && group.supervisor_id !== sub) {
+  // Supervisors can see grades for their own group or groups their panel examines
+  if (role === 'supervisor' && group.supervisor_id !== sub && !(await isPanelMember(group, sub))) {
     res.status(403).json({ error: 'Access denied' })
     return
   }
@@ -172,22 +189,38 @@ router.get('/:groupId', async (req: Request, res: Response): Promise<void> => {
     [groupId]
   )
 
-  // Calculate aggregate
+  // Aggregate: panel score = average of panel members' grades;
+  // final = average of the supervisor score and the panel score.
   const formatted = grades.map(formatGrade)
-  const avg = formatted.length
-    ? parseFloat(
-        (formatted.reduce((s, g) => s + g.score, 0) / formatted.length).toFixed(2)
-      )
+  const supervisorGrade = formatted.find((g) => g.graderRole === 'supervisor') ?? null
+  const panelGrades     = formatted.filter((g) => g.graderRole === 'panel')
+
+  const panelAverage = panelGrades.length
+    ? parseFloat((panelGrades.reduce((s, g) => s + g.score, 0) / panelGrades.length).toFixed(2))
     : null
 
-  res.json({ grades: formatted, average: avg, count: formatted.length })
+  const parts = [supervisorGrade?.score, panelAverage].filter((v): v is number => v != null)
+  const finalScore = parts.length
+    ? parseFloat((parts.reduce((s, v) => s + v, 0) / parts.length).toFixed(2))
+    : null
+
+  res.json({
+    grades:          formatted,
+    supervisorScore: supervisorGrade?.score ?? null,
+    panelAverage,
+    panelCount:      panelGrades.length,
+    finalScore,
+    // Kept for backwards compatibility with existing clients
+    average: finalScore,
+    count:   formatted.length,
+  })
 })
 
-// ─── GET /grades/:groupId/mine — examiner/supervisor views their own grade ────
+// ─── GET /grades/:groupId/mine — grader views their own grade ─────────────────
 
 router.get(
   '/:groupId/mine',
-  requireRole('supervisor', 'examiner'),
+  requireRole('supervisor'),
   async (req: Request, res: Response): Promise<void> => {
     const groupId = p(req.params.groupId)
     const { sub } = req.user!
@@ -210,7 +243,7 @@ router.get(
 
 router.delete(
   '/:groupId',
-  requireRole('supervisor', 'examiner'),
+  requireRole('supervisor'),
   async (req: Request, res: Response): Promise<void> => {
     const groupId = p(req.params.groupId)
     const { sub } = req.user!

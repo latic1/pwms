@@ -25,22 +25,19 @@ const navItems: Record<Role, NavItem[]> = {
     { label: 'Groups',     href: '/supervisor/groups',   icon: <IconUsers /> },
     { label: 'Meetings',   href: '/supervisor/meetings', icon: <IconCalendar /> },
     { label: 'Grading',    href: '/supervisor/grading',  icon: <IconStar /> },
+    { label: 'Panel Duty', href: '/supervisor/panel',    icon: <IconDoc /> },
     { label: 'Settings',   href: '/settings',            icon: <IconCog /> },
   ],
   admin: [
     { label: 'Dashboard',        href: '/admin',                  icon: <IconGrid /> },
     { label: 'Users',            href: '/admin/users',            icon: <IconUsers /> },
     { label: 'Groups',           href: '/admin/groups',           icon: <IconFolder /> },
+    { label: 'Panels',           href: '/admin/panels',           icon: <IconList /> },
     { label: 'Academic Periods', href: '/admin/periods',          icon: <IconCalendar /> },
     { label: 'Announcements',    href: '/admin/announcements',    icon: <IconBell /> },
     { label: 'Audit Log',        href: '/admin/audit-log',        icon: <IconList /> },
     { label: 'Reports',          href: '/admin/reports',          icon: <IconChart /> },
     { label: 'Settings',         href: '/settings',               icon: <IconCog /> },
-  ],
-  examiner: [
-    { label: 'Dashboard',   href: '/examiner',             icon: <IconGrid /> },
-    { label: 'Submissions', href: '/examiner/submissions', icon: <IconDoc /> },
-    { label: 'Settings',    href: '/settings',             icon: <IconCog /> },
   ],
 }
 
@@ -48,7 +45,6 @@ const roleMeta: Record<Role, { label: string; accent: string; dot: string }> = {
   student:    { label: 'Student',    accent: 'text-blue-400',   dot: 'bg-blue-400' },
   supervisor: { label: 'Supervisor', accent: 'text-emerald-400',dot: 'bg-emerald-400' },
   admin:      { label: 'Admin',      accent: 'text-violet-400', dot: 'bg-violet-400' },
-  examiner:   { label: 'Examiner',   accent: 'text-amber-400',  dot: 'bg-amber-400' },
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

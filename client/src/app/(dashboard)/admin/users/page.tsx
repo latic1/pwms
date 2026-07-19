@@ -9,10 +9,9 @@ const roleStyles: Record<Role, string> = {
   student:    'bg-blue-100 text-blue-700',
   supervisor: 'bg-green-100 text-green-700',
   admin:      'bg-purple-100 text-purple-700',
-  examiner:   'bg-orange-100 text-orange-700',
 }
 
-const roles: Role[] = ['student', 'supervisor', 'admin', 'examiner']
+const roles: Role[] = ['student', 'supervisor', 'admin']
 
 interface Credentials { name: string; email: string; tempPassword: string }
 
@@ -382,7 +381,6 @@ export default function UsersPage() {
     student:    users.filter((u) => u.role === 'student').length,
     supervisor: users.filter((u) => u.role === 'supervisor').length,
     admin:      users.filter((u) => u.role === 'admin').length,
-    examiner:   users.filter((u) => u.role === 'examiner').length,
   }
 
   return (

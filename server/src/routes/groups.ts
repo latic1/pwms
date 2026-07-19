@@ -20,6 +20,7 @@ interface DbGroup {
   invite_code: string
   leader_id: string
   supervisor_id: string | null
+  panel_id: string | null
   period_id: string | null
   created_at: string
 }
@@ -40,7 +41,8 @@ interface DbMember {
 function formatGroup(
   group: DbGroup,
   members: DbMember[],
-  supervisor: { id: string; name: string; email: string } | null
+  supervisor: { id: string; name: string; email: string } | null,
+  panel: { id: string; name: string } | null = null
 ) {
   return {
     id:           group.id,
@@ -48,9 +50,11 @@ function formatGroup(
     inviteCode:   group.invite_code,
     leaderId:     group.leader_id,
     supervisorId: group.supervisor_id,
+    panelId:      group.panel_id,
     periodId:     group.period_id,
     createdAt:    group.created_at,
     supervisor,
+    panel,
     members: members.map((m) => ({
       id:          m.user_id,
       name:        m.name,
@@ -88,7 +92,14 @@ async function getGroupWithMembers(groupId: string) {
       )
     : null
 
-  return formatGroup(group, members, supervisor)
+  const panel = group.panel_id
+    ? await queryOne<{ id: string; name: string }>(
+        'SELECT id, name FROM panels WHERE id = $1',
+        [group.panel_id]
+      )
+    : null
+
+  return formatGroup(group, members, supervisor, panel)
 }
 
 async function getActivePeriod() {
@@ -236,11 +247,11 @@ router.get('/my', requireRole('student'), async (req: Request, res: Response): P
 
 // ─── GET /groups — list all groups (admin) or supervisor's groups ──────────────
 
-router.get('/', requireRole('admin', 'supervisor', 'examiner'), async (req: Request, res: Response): Promise<void> => {
+router.get('/', requireRole('admin', 'supervisor'), async (req: Request, res: Response): Promise<void> => {
   const { role, sub } = req.user!
 
   const groups =
-    role === 'admin' || role === 'examiner'
+    role === 'admin'
       ? await query<DbGroup>('SELECT * FROM groups ORDER BY created_at DESC')
       : await query<DbGroup>(
           'SELECT * FROM groups WHERE supervisor_id = $1 ORDER BY created_at DESC',
@@ -260,6 +271,7 @@ router.get('/', requireRole('admin', 'supervisor', 'examiner'), async (req: Requ
         inviteCode:   g.invite_code,
         leaderId:     g.leader_id,
         supervisorId: g.supervisor_id,
+        panelId:      g.panel_id,
         periodId:     g.period_id,
         createdAt:    g.created_at,
         memberCount:  parseInt(count),
@@ -332,6 +344,33 @@ router.patch('/:id/supervisor', requireRole('admin'), async (req: Request, res: 
   )
 
   await audit(req.user!.sub, 'supervisor.assigned', 'group', id, { supervisorId })
+
+  const full = await getGroupWithMembers(id)
+  res.json(full)
+})
+
+// ─── PATCH /groups/:id/panel — assign examination panel (admin) ───────────────
+
+router.patch('/:id/panel', requireRole('admin'), async (req: Request, res: Response): Promise<void> => {
+  const { panelId } = req.body
+  const id = p(req.params.id)
+
+  const group = await queryOne<DbGroup>('SELECT * FROM groups WHERE id = $1', [id])
+  if (!group) {
+    res.status(404).json({ error: 'Group not found' })
+    return
+  }
+
+  if (panelId) {
+    const panel = await queryOne('SELECT id FROM panels WHERE id = $1', [panelId])
+    if (!panel) {
+      res.status(400).json({ error: 'Panel not found' })
+      return
+    }
+  }
+
+  await query('UPDATE groups SET panel_id = $1 WHERE id = $2', [panelId ?? null, id])
+  await audit(req.user!.sub, 'panel.assigned', 'group', id, { panelId })
 
   const full = await getGroupWithMembers(id)
   res.json(full)

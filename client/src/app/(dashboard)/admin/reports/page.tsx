@@ -25,7 +25,7 @@ function exportCSV(groups: GroupReport[]) {
     'Proposal Status', 'Proposal Version',
     'Tasks Done', 'Tasks Total', 'Task %',
     'Final Report', 'Documents',
-    'Supervisor Score', 'Examiner Score', 'Final Score', 'Grade',
+    'Supervisor Score', 'Panel Score', 'Final Score', 'Grade',
   ]
 
   const rows = groups.map((g) => [
@@ -40,7 +40,7 @@ function exportCSV(groups: GroupReport[]) {
     g.hasFinalReport ? 'Yes' : 'No',
     g.docCount,
     g.supervisorScore ?? '',
-    g.examinerScore ?? '',
+    g.panelScore ?? '',
     g.finalScore ?? '',
     grade(g.finalScore).label,
   ])
@@ -149,7 +149,7 @@ export default function ReportsPage() {
             <StatCard
               label="Grades Submitted"
               value={`${summary.grades.supervisorGraded} / ${summary.grades.total}`}
-              sub={`${summary.grades.examinerGraded} examiner grades`}
+              sub={`${summary.grades.panelGraded} panel graded`}
             />
           </div>
 
@@ -246,7 +246,7 @@ export default function ReportsPage() {
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Tasks</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Final Report</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Sup. Score</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">Exam. Score</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">Panel Score</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Grade</th>
               </tr>
             </thead>
@@ -312,7 +312,7 @@ export default function ReportsPage() {
                       </td>
 
                       <td className="px-4 py-3 text-center text-gray-700">
-                        {g.examinerScore != null ? g.examinerScore : <span className="text-gray-300">—</span>}
+                        {g.panelScore != null ? g.panelScore : <span className="text-gray-300">—</span>}
                       </td>
 
                       <td className="px-4 py-3 text-center">

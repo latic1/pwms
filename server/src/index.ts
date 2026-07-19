@@ -19,6 +19,7 @@ import auditLogRoutes          from './routes/auditLog'
 import publicRoutes            from './routes/public'
 import reportRoutes            from './routes/reports'
 import aiRoutes                from './routes/ai'
+import panelRoutes             from './routes/panels'
 import { startDeadlineReminders } from './lib/deadlineReminder'
 
 dotenv.config()
@@ -74,6 +75,7 @@ app.use('/documents',       documentRoutes)
 app.use('/messages',        messageRoutes)
 app.use('/meetings',        meetingRoutes)
 app.use('/grades',          gradeRoutes)
+app.use('/panels',          panelRoutes)
 app.use('/periods',         periodRoutes)
 app.use('/audit-log',              auditLogRoutes)
 app.use('/admin/announcements',    adminAnnouncementRoutes)

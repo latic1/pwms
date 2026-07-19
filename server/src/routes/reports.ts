@@ -25,13 +25,13 @@ router.get('/summary', async (_req: Request, res: Response): Promise<void> => {
       students: string
       supervisors: string
       admins: string
-      examiners: string
+      panels: string
     }>(`
       SELECT
         COUNT(*) FILTER (WHERE role = 'student')    AS students,
         COUNT(*) FILTER (WHERE role = 'supervisor') AS supervisors,
         COUNT(*) FILTER (WHERE role = 'admin')      AS admins,
-        COUNT(*) FILTER (WHERE role = 'examiner')   AS examiners
+        (SELECT COUNT(*) FROM panels)               AS panels
       FROM users
     `),
 
@@ -59,10 +59,10 @@ router.get('/summary', async (_req: Request, res: Response): Promise<void> => {
       FROM tasks
     `),
 
-    queryOne<{ supervisor_graded: string; examiner_graded: string }>(`
+    queryOne<{ supervisor_graded: string; panel_graded: string }>(`
       SELECT
-        COUNT(*) FILTER (WHERE grader_role = 'supervisor') AS supervisor_graded,
-        COUNT(*) FILTER (WHERE grader_role = 'examiner')   AS examiner_graded
+        COUNT(DISTINCT group_id) FILTER (WHERE grader_role = 'supervisor') AS supervisor_graded,
+        COUNT(DISTINCT group_id) FILTER (WHERE grader_role = 'panel')      AS panel_graded
       FROM grades
     `),
 
@@ -84,7 +84,7 @@ router.get('/summary', async (_req: Request, res: Response): Promise<void> => {
       students:    parseInt(users?.students ?? '0'),
       supervisors: parseInt(users?.supervisors ?? '0'),
       admins:      parseInt(users?.admins ?? '0'),
-      examiners:   parseInt(users?.examiners ?? '0'),
+      panels:      parseInt(users?.panels ?? '0'),
     },
     proposals: {
       pending:  parseInt(proposals?.pending ?? '0'),
@@ -98,7 +98,7 @@ router.get('/summary', async (_req: Request, res: Response): Promise<void> => {
     },
     grades: {
       supervisorGraded: parseInt(grades?.supervisor_graded ?? '0'),
-      examinerGraded:   parseInt(grades?.examiner_graded ?? '0'),
+      panelGraded:      parseInt(grades?.panel_graded ?? '0'),
       total:            parseInt(groups?.total ?? '0'),
     },
     documents: {
@@ -116,6 +116,7 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
     group_name:        string
     created_at:        string
     supervisor_name:   string | null
+    panel_name:        string | null
     member_count:      string
     proposal_title:    string | null
     proposal_status:   string | null
@@ -124,7 +125,8 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
     task_done:         string
     has_final_report:  boolean
     supervisor_score:  string | null
-    examiner_score:    string | null
+    panel_score:       string | null
+    panel_grade_count: string
     doc_count:         string
   }>(`
     SELECT
@@ -132,8 +134,9 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
       g.name                      AS group_name,
       g.created_at,
 
-      -- Supervisor
+      -- Supervisor & panel
       sv.name                     AS supervisor_name,
+      pl.name                     AS panel_name,
 
       -- Member count
       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id)
@@ -154,9 +157,10 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
         WHERE d.group_id = g.id AND d.type = 'final_report'
       )                           AS has_final_report,
 
-      -- Grades
+      -- Grades: panel score = average of panel members' grades
       sg.score                    AS supervisor_score,
-      eg.score                    AS examiner_score,
+      pg.avg_score                AS panel_score,
+      COALESCE(pg.grade_count, 0) AS panel_grade_count,
 
       -- Document count
       COALESCE(dc.total, 0)       AS doc_count
@@ -164,6 +168,7 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
     FROM groups g
 
     LEFT JOIN users sv ON sv.id = g.supervisor_id
+    LEFT JOIN panels pl ON pl.id = g.panel_id
 
     LEFT JOIN LATERAL (
       SELECT title, status, version
@@ -181,7 +186,11 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
     ) t ON true
 
     LEFT JOIN grades sg ON sg.group_id = g.id AND sg.grader_role = 'supervisor'
-    LEFT JOIN grades eg ON eg.group_id = g.id AND eg.grader_role = 'examiner'
+
+    LEFT JOIN LATERAL (
+      SELECT AVG(score) AS avg_score, COUNT(*) AS grade_count
+      FROM grades WHERE group_id = g.id AND grader_role = 'panel'
+    ) pg ON true
 
     LEFT JOIN LATERAL (
       SELECT COUNT(*) AS total FROM documents WHERE group_id = g.id
@@ -196,6 +205,7 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
       groupName:        r.group_name,
       createdAt:        r.created_at,
       supervisorName:   r.supervisor_name ?? null,
+      panelName:        r.panel_name ?? null,
       memberCount:      parseInt(r.member_count),
       proposal: r.proposal_status
         ? {
@@ -210,12 +220,15 @@ router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
       },
       hasFinalReport:  r.has_final_report,
       supervisorScore: r.supervisor_score != null ? parseFloat(r.supervisor_score) : null,
-      examinerScore:   r.examiner_score   != null ? parseFloat(r.examiner_score)   : null,
+      panelScore:      r.panel_score      != null ? parseFloat(parseFloat(r.panel_score).toFixed(2)) : null,
+      panelGradeCount: parseInt(r.panel_grade_count),
       finalScore:
-        r.supervisor_score != null && r.examiner_score != null
-          ? Math.round((parseFloat(r.supervisor_score) + parseFloat(r.examiner_score)) / 2)
+        r.supervisor_score != null && r.panel_score != null
+          ? Math.round((parseFloat(r.supervisor_score) + parseFloat(r.panel_score)) / 2)
           : r.supervisor_score != null
           ? Math.round(parseFloat(r.supervisor_score))
+          : r.panel_score != null
+          ? Math.round(parseFloat(r.panel_score))
           : null,
       docCount: parseInt(r.doc_count),
     }))

@@ -27,7 +27,7 @@ export const changePasswordSchema = z.object({
 
 // ─── Admin Users ──────────────────────────────────────────────────────────────
 
-const ROLES = ['student', 'supervisor', 'admin', 'examiner'] as const
+const ROLES = ['student', 'supervisor', 'admin'] as const
 
 export const createUserSchema = z.object({
   name:        z.string().min(1, 'Name is required').max(100).trim(),
@@ -88,6 +88,22 @@ export const submitGradeSchema = z.object({
   score:    z.number().int().min(0).max(100),
   rubric:   z.record(z.string(), z.number()).optional(),
   feedback: z.string().max(2000).trim().optional(),
+})
+
+// ─── Panels ──────────────────────────────────────────────────────────────────
+
+export const createPanelSchema = z.object({
+  name:      z.string().min(1, 'Panel name is required').max(100).trim(),
+  memberIds: z.array(z.string().uuid('Invalid member ID')).max(20).optional(),
+})
+
+export const updatePanelSchema = z.object({
+  name:      z.string().min(1).max(100).trim().optional(),
+  memberIds: z.array(z.string().uuid('Invalid member ID')).max(20).optional(),
+})
+
+export const assignPanelSchema = z.object({
+  panelId: z.string().uuid('Invalid panel ID').nullable(),
 })
 
 // ─── Messages ────────────────────────────────────────────────────────────────
