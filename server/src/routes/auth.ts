@@ -31,6 +31,7 @@ interface DbUser {
   department: string | null
   program: string | null
   expertise: string | null
+  must_change_password: boolean
 }
 
 // ─── POST /auth/login ─────────────────────────────────────────────────────────
@@ -71,13 +72,14 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
     accessToken,
     refreshToken,
     user: {
-      id:          user.id,
-      name:        user.name,
-      email:       user.email,
-      role:        user.role,
-      indexNumber: user.index_number,
-      department:  user.department,
-      program:     user.program,
+      id:                user.id,
+      name:              user.name,
+      email:             user.email,
+      role:              user.role,
+      indexNumber:       user.index_number,
+      department:        user.department,
+      program:           user.program,
+      mustChangePassword: user.must_change_password,
     },
   })
 })
@@ -119,7 +121,7 @@ router.post('/refresh', validate(refreshSchema), async (req: Request, res: Respo
 
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   const user = await queryOne<DbUser>(
-    `SELECT id, name, email, role, index_number, department, program, expertise
+    `SELECT id, name, email, role, index_number, department, program, expertise, must_change_password
      FROM users WHERE id = $1`,
     [req.user!.sub]
   )
@@ -130,14 +132,15 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
   }
 
   res.json({
-    id:          user.id,
-    name:        user.name,
-    email:       user.email,
-    role:        user.role,
-    indexNumber: user.index_number,
-    department:  user.department,
-    program:     user.program,
-    expertise:   user.expertise,
+    id:                user.id,
+    name:              user.name,
+    email:             user.email,
+    role:              user.role,
+    indexNumber:       user.index_number,
+    department:        user.department,
+    program:           user.program,
+    expertise:         user.expertise,
+    mustChangePassword: user.must_change_password,
   })
 })
 
@@ -264,7 +267,10 @@ router.post('/change-password', authenticate, validate(changePasswordSchema), as
   }
 
   const newHash = await bcrypt.hash(newPassword, 10)
-  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.id])
+  await query(
+    'UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2',
+    [newHash, user.id]
+  )
 
   res.json({ message: 'Password changed successfully.' })
 })

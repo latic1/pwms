@@ -10,6 +10,7 @@ export interface User {
   department?: string
   program?: string
   createdAt?: string
+  mustChangePassword?: boolean
 }
 
 export interface GroupMember {

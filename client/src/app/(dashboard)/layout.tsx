@@ -72,12 +72,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return
+    if (!user) {
       router.replace('/login')
+    } else if (user.mustChangePassword) {
+      router.replace('/change-password')
     }
   }, [user, loading, router])
 
-  if (loading) {
+  if (loading || user?.mustChangePassword) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-3">

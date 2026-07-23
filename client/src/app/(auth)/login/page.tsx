@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
+import api from '@/lib/api'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -10,6 +11,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
+  const [defaultPassword, setDefaultPassword] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get<{ password: string }>('/public/default-password')
+      .then((res) => setDefaultPassword(res.data.password))
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -91,6 +99,18 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {defaultPassword && (
+        <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-center">
+          <p className="text-xs text-blue-700">
+            <span className="font-semibold">New student?</span> Log in with your university email and the
+            default password:{' '}
+            <code className="bg-white/70 px-1.5 py-0.5 rounded font-semibold">{defaultPassword}</code>
+          </p>
+          <p className="text-[11px] text-blue-500 mt-1">
+            You'll be asked to set your own password right after signing in.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

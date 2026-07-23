@@ -4,8 +4,15 @@
  */
 import { Router, Request, Response } from 'express'
 import { query } from '../db'
+import { DEFAULT_STUDENT_PASSWORD } from '../lib/defaultPassword'
 
 const router = Router()
+
+// ─── GET /public/default-password — shown on the login page for new students ──
+
+router.get('/default-password', (_req: Request, res: Response): void => {
+  res.json({ password: DEFAULT_STUDENT_PASSWORD })
+})
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

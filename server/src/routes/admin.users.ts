@@ -9,6 +9,7 @@ import { validate } from '../middleware/validate'
 import { createUserSchema, updateUserSchema } from '../lib/schemas'
 import { smsNewUser } from '../lib/sms'
 import { emailNewUser, emailPasswordReset } from '../lib/email'
+import { DEFAULT_STUDENT_PASSWORD } from '../lib/defaultPassword'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
@@ -81,15 +82,17 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
     }
   }
 
-  // Auto-generate a temporary password — returned once to the admin
-  const tempPassword = generateTempPassword()
+  // Students share a single default password shown on the login page;
+  // other roles get a unique random temp password. Either way the account
+  // is flagged to force a password change on first login.
+  const tempPassword = role === 'student' ? DEFAULT_STUDENT_PASSWORD : generateTempPassword()
   const passwordHash = await bcrypt.hash(tempPassword, 10)
 
   const cleanPhone = phone?.trim().replace(/\s+/g, '') || null
 
   const [newUser] = await query<DbUser>(
-    `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program, must_change_password)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
      RETURNING id, name, email, role, phone, index_number, department, program, created_at`,
     [
       name.trim(),
@@ -182,6 +185,10 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
   const created: object[] = []
   const skipped: { row: number; email: string; reason: string }[] = []
 
+  // All bulk-imported rows are students, so they all share the one default
+  // password — hash it once instead of per row.
+  const defaultPasswordHash = await bcrypt.hash(DEFAULT_STUDENT_PASSWORD, 10)
+
   for (let i = 0; i < rows.length; i++) {
     const row   = rows[i]
     const rowNo = i + 2 // 1-indexed + header row
@@ -218,20 +225,17 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
       }
     }
 
-    const tempPassword = generateTempPassword()
-    const passwordHash = await bcrypt.hash(tempPassword, 10)
-
     const [newUser] = await query<DbUser>(
-      `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program)
-       VALUES ($1, $2, $3, 'student', $4, $5, $6, $7)
+      `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program, must_change_password)
+       VALUES ($1, $2, $3, 'student', $4, $5, $6, $7, TRUE)
        RETURNING id, name, email, role, phone, index_number, department, program, created_at`,
-      [name, email, passwordHash, phone || null, indexNumber || null, department || null, program || null]
+      [name, email, defaultPasswordHash, phone || null, indexNumber || null, department || null, program || null]
     )
 
-    if (phone) smsNewUser(phone, newUser.name, newUser.email, tempPassword)
-    emailNewUser(newUser.email, newUser.name, tempPassword)
+    if (phone) smsNewUser(phone, newUser.name, newUser.email, DEFAULT_STUDENT_PASSWORD)
+    emailNewUser(newUser.email, newUser.name, DEFAULT_STUDENT_PASSWORD)
 
-    created.push({ ...toSafeUser(newUser), tempPassword })
+    created.push({ ...toSafeUser(newUser), tempPassword: DEFAULT_STUDENT_PASSWORD })
   }
 
   res.status(201).json({
@@ -246,16 +250,19 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
 router.post('/:id/reset-password', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params
 
-  const user = await queryOne<DbUser>('SELECT id, name, email FROM users WHERE id = $1', [id])
+  const user = await queryOne<DbUser>('SELECT id, name, email, role FROM users WHERE id = $1', [id])
   if (!user) {
     res.status(404).json({ error: 'User not found' })
     return
   }
 
-  const tempPassword = generateTempPassword()
+  const tempPassword = user.role === 'student' ? DEFAULT_STUDENT_PASSWORD : generateTempPassword()
   const passwordHash = await bcrypt.hash(tempPassword, 10)
 
-  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, id])
+  await query(
+    'UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE id = $2',
+    [passwordHash, id]
+  )
 
   // Email the new temp password in the background — don't block the response
   emailPasswordReset(user.email, user.name, tempPassword)

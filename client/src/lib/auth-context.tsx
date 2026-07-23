@@ -24,6 +24,7 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -57,6 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restore()
   }, [])
 
+  // Re-fetch the current user — e.g. after they change their password, so
+  // the mustChangePassword flag clears without requiring a fresh login.
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return
+    const { data } = await axios.get<User>(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    setUser(data)
+  }, [])
+
   const login = useCallback(async (email: string, password: string) => {
     const { data } = await axios.post<LoginResponse>(`${API_BASE}/auth/login`, {
       email,
@@ -65,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
     setUser(data.user)
-    router.push('/')
+    router.push(data.user.mustChangePassword ? '/change-password' : '/')
   }, [router])
 
   const logout = useCallback(() => {
@@ -76,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
