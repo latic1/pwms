@@ -33,9 +33,21 @@ export const createUserSchema = z.object({
   name:        z.string().min(1, 'Name is required').max(100).trim(),
   email:       z.string().email('Invalid email address').max(254).trim().toLowerCase(),
   role:        z.enum(ROLES, { error: 'Invalid role' }),
+  // Required for every role — password-reset codes are delivered by SMS, so a
+  // phone number must be on file from the moment the account is created.
+  phone:       z.string().min(9, 'Phone number is required').max(20).trim(),
   indexNumber: z.string().max(50).trim().optional(),
   department:  z.string().max(100).trim().optional(),
   program:     z.string().max(100).trim().optional(),
+}).superRefine((data, ctx) => {
+  // Students need these to appear anywhere in the system (group rosters,
+  // bulk import, reports) — enforce the same requirement here that the
+  // single-registration form already enforces client-side, so bulk import
+  // and single registration hold users to the same standard.
+  if (data.role !== 'student') return
+  if (!data.indexNumber) ctx.addIssue({ code: 'custom', path: ['indexNumber'], message: 'Index number is required for students' })
+  if (!data.department)  ctx.addIssue({ code: 'custom', path: ['department'],  message: 'Faculty is required for students' })
+  if (!data.program)     ctx.addIssue({ code: 'custom', path: ['program'],     message: 'Program is required for students' })
 })
 
 export const updateUserSchema = z.object({

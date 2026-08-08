@@ -40,12 +40,24 @@ interface DbUser {
 
 // ─── GET /admin/users ─────────────────────────────────────────────────────────
 
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
-  const users = await query<DbUser>(
-    `SELECT id, name, email, role, phone, index_number, department, program, created_at
-     FROM users
-     ORDER BY created_at DESC`
-  )
+router.get('/', async (req: Request, res: Response): Promise<void> => {
+  const { role } = req.query
+  const validRoles = ['student', 'supervisor', 'admin']
+
+  const users =
+    typeof role === 'string' && validRoles.includes(role)
+      ? await query<DbUser>(
+          `SELECT id, name, email, role, phone, index_number, department, program, created_at
+           FROM users
+           WHERE role = $1
+           ORDER BY created_at DESC`,
+          [role]
+        )
+      : await query<DbUser>(
+          `SELECT id, name, email, role, phone, index_number, department, program, created_at
+           FROM users
+           ORDER BY created_at DESC`
+        )
 
   res.json(users.map(toSafeUser))
 })
@@ -195,13 +207,31 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
 
     const name        = col(row, 'name', 'fullname', 'studentname')
     const email       = col(row, 'email', 'emailaddress').toLowerCase()
-    const phone       = col(row, 'phone', 'phonenumber', 'mobile', 'tel').replace(/\s+/g, '') || null
+    const phone       = col(row, 'phone', 'phonenumber', 'mobile', 'tel').replace(/\s+/g, '')
     const indexNumber = col(row, 'indexnumber', 'index', 'indexno', 'studentid')
-    const department  = col(row, 'department', 'dept')
+    const department  = col(row, 'faculty', 'department', 'dept')
     const program     = col(row, 'program', 'programme', 'course')
 
+    // Same required fields as the single-registration form — a bulk import
+    // shouldn't be able to create accounts the single form wouldn't allow.
     if (!name || !email) {
       skipped.push({ row: rowNo, email: email || '—', reason: 'Missing name or email' })
+      continue
+    }
+    if (!phone || phone.length < 9) {
+      skipped.push({ row: rowNo, email, reason: 'Missing or invalid phone number (required for SMS notifications)' })
+      continue
+    }
+    if (!indexNumber) {
+      skipped.push({ row: rowNo, email, reason: 'Missing index number' })
+      continue
+    }
+    if (!department) {
+      skipped.push({ row: rowNo, email, reason: 'Missing faculty' })
+      continue
+    }
+    if (!program) {
+      skipped.push({ row: rowNo, email, reason: 'Missing program' })
       continue
     }
 

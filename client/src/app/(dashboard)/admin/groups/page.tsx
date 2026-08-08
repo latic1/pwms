@@ -107,7 +107,7 @@ function GroupDetail({ groupId, onClose }: { groupId: string; onClose: () => voi
           {/* Members */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Members ({group.members.length}/3)
+              Members ({group.members.length}/4)
             </p>
             <div className="space-y-2">
               {group.members.map((m) => (

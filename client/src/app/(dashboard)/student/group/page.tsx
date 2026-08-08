@@ -187,7 +187,7 @@ export default function GroupPage() {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Share this code with students you want to invite. Max 3 members.
+              Share this code with students you want to invite. Max 4 members.
             </p>
           </div>
         )}
@@ -196,7 +196,7 @@ export default function GroupPage() {
       {/* Members */}
       <div className="bg-white rounded-xl border shadow-sm p-6">
         <h2 className="font-semibold text-gray-800 mb-4">
-          Members ({group.members.length}/3)
+          Members ({group.members.length}/4)
         </h2>
         <ul className="space-y-3">
           {group.members.map((member, i) => (
@@ -236,9 +236,9 @@ export default function GroupPage() {
           ))}
         </ul>
 
-        {group.members.length < 3 && (
+        {group.members.length < 4 && (
           <p className="mt-4 text-xs text-gray-400 border-t pt-3">
-            {3 - group.members.length} slot{3 - group.members.length > 1 ? 's' : ''} remaining
+            {4 - group.members.length} slot{4 - group.members.length > 1 ? 's' : ''} remaining
           </p>
         )}
       </div>

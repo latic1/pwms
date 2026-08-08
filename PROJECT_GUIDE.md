@@ -45,7 +45,7 @@
 
 ### 3.2 Group Management
 - Leader creates group → system generates unique invite code
-- Members join with invite code (enforced max: 3 students)
+- Members join with invite code (enforced max: 4 students)
 - Admin sets group formation deadline; joins blocked after deadline
 - Admin can override: add/remove members, reassign leader
 - Admin assigns a supervisor to each group
@@ -205,7 +205,7 @@ Build all pages with hardcoded mock data. No backend calls yet — focus on layo
 
 ## 7. Key Business Rules to Enforce in Code
 
-1. **Group size:** Hard cap at 3 members; invite code rejected if group is full.
+1. **Group size:** Hard cap at 4 members; invite code rejected if group is full.
 2. **Deadline enforcement:** Group joins, proposals, and final reports blocked server-side after respective deadlines — not just hidden in the UI.
 3. **Leader-only submissions:** Proposal and final report endpoints must verify `userId === group.leaderId`.
 4. **Supervisor scope:** Supervisors may only view/grade groups assigned to them by admin.

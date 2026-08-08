@@ -82,7 +82,7 @@ function BulkImportPanel({ onDone }: { onDone: () => void }) {
   const [copied,  setCopied]  = useState(false)
 
   function downloadTemplate() {
-    const csv = 'name,email,phone,indexNumber,department,program\nJane Doe,jane@uni.edu,0246314915,CS/2024/001,Computer Science,BSc Computer Science\n'
+    const csv = 'name,email,phone,indexNumber,faculty,program\nJane Doe,jane@uni.edu,0246314915,CS/2024/001,Computer Science,BSc Computer Science\n'
     const blob = new Blob([csv], { type: 'text/csv' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
@@ -232,9 +232,13 @@ function BulkImportPanel({ onDone }: { onDone: () => void }) {
       {/* Required columns hint */}
       <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700 space-y-1">
         <p className="font-semibold">Required columns:</p>
-        <p><code className="bg-white/70 px-1 rounded">name</code>, <code className="bg-white/70 px-1 rounded">email</code></p>
-        <p className="text-blue-500">Optional: <code className="bg-white/70 px-1 rounded">phone</code>, <code className="bg-white/70 px-1 rounded">indexNumber</code>, <code className="bg-white/70 px-1 rounded">department</code>, <code className="bg-white/70 px-1 rounded">program</code></p>
-        <p className="text-blue-500">Column names are case-insensitive. All imported users are created as <strong>students</strong>.</p>
+        <p>
+          <code className="bg-white/70 px-1 rounded">name</code>, <code className="bg-white/70 px-1 rounded">email</code>,{' '}
+          <code className="bg-white/70 px-1 rounded">phone</code>, <code className="bg-white/70 px-1 rounded">indexNumber</code>,{' '}
+          <code className="bg-white/70 px-1 rounded">faculty</code>, <code className="bg-white/70 px-1 rounded">program</code>
+        </p>
+        <p className="text-blue-500">Same fields as single registration — rows missing any of these are skipped. Phone is required so students can receive SMS notifications and password reset codes.</p>
+        <p className="text-blue-500">Column names are case-insensitive (<code className="bg-white/70 px-1 rounded">department</code> is also accepted for <code className="bg-white/70 px-1 rounded">faculty</code>). All imported users are created as <strong>students</strong>.</p>
       </div>
 
       {/* Drop zone */}
@@ -327,7 +331,7 @@ export default function UsersPage() {
       const res = await api.post('/admin/users', {
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        phone: phone.trim() || undefined,
+        phone: phone.trim(),
         role,
         ...(role === 'student' && {
           indexNumber: indexNumber.trim(),
@@ -466,12 +470,13 @@ export default function UsersPage() {
 
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Phone number <span className="text-gray-400 font-normal">(optional — for SMS notifications)</span>
+                Phone number <span className="text-gray-400 font-normal">(required — for SMS notifications and password reset codes)</span>
               </label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                required
                 placeholder="e.g. 0246314915"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
@@ -510,7 +515,7 @@ export default function UsersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Faculty</label>
                   <input
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
@@ -584,7 +589,7 @@ export default function UsersPage() {
             <tr className="border-b bg-gray-50">
               <th className="text-left px-5 py-3 font-medium text-gray-600">Name</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600">Email</th>
-              <th className="text-left px-5 py-3 font-medium text-gray-600 hidden md:table-cell">Index / Dept</th>
+              <th className="text-left px-5 py-3 font-medium text-gray-600 hidden md:table-cell">Index / Faculty</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600">Role</th>
               <th className="px-5 py-3" />
             </tr>

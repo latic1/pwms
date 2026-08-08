@@ -93,13 +93,13 @@ export default function ProjectsPage() {
             />
           </div>
 
-          {/* Department */}
+          {/* Faculty */}
           <select
             value={department}
             onChange={(e) => setDepartment(e.target.value)}
             className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700"
           >
-            <option value="">All Departments</option>
+            <option value="">All Faculties</option>
             {departments.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
 

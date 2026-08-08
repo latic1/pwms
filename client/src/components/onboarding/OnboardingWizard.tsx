@@ -62,7 +62,7 @@ const steps = [
             </p>
           </div>
         </div>
-        <p className="text-xs text-gray-400">Groups are limited to 3 members maximum.</p>
+        <p className="text-xs text-gray-400">Groups are limited to 4 members maximum.</p>
       </div>
     ),
   },

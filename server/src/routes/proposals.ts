@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
@@ -12,6 +15,30 @@ const router = Router()
 router.use(authenticate)
 
 const p = (v: string | string[]): string => (Array.isArray(v) ? v[0] : v)
+
+// ─── Multer config — proposal submission is multipart/form-data (title,
+// abstract, file), so it needs the same disk-storage handling documents.ts
+// uses. Without this, req.body is never populated for the request and the
+// route throws trying to destructure it.
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads')
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename:    (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`
+    cb(null, `${unique}${path.extname(file.originalname)}`)
+  },
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true)
+    else cb(new Error('Only PDF files are accepted for proposals'))
+  },
+})
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,18 +98,25 @@ async function getProposalDeadline(periodId: string | null): Promise<Date | null
 
 // ─── POST /proposals/:groupId — submit/resubmit a proposal (leader only) ──────
 
-router.post('/:groupId', requireRole('student'), async (req: Request, res: Response): Promise<void> => {
+router.post('/:groupId', requireRole('student'), upload.single('file'), async (req: Request, res: Response): Promise<void> => {
   const groupId = p(req.params.groupId)
-  const { title, abstract, fileUrl } = req.body
+  const { title, abstract } = req.body
   const userId = req.user!.sub
 
   if (!title?.trim() || !abstract?.trim()) {
+    if (req.file) fs.unlinkSync(req.file.path)
     res.status(400).json({ error: 'title and abstract are required' })
+    return
+  }
+
+  if (!req.file) {
+    res.status(400).json({ error: 'A proposal PDF is required' })
     return
   }
 
   const group = await assertLeader(groupId, userId)
   if (!group) {
+    fs.unlinkSync(req.file.path)
     res.status(403).json({ error: 'Only the group leader can submit a proposal' })
     return
   }
@@ -90,6 +124,7 @@ router.post('/:groupId', requireRole('student'), async (req: Request, res: Respo
   // Enforce proposal deadline
   const deadline = await getProposalDeadline(group.period_id)
   if (deadline && new Date() > deadline) {
+    fs.unlinkSync(req.file.path)
     res.status(403).json({ error: 'Proposal submission deadline has passed' })
     return
   }
@@ -102,17 +137,19 @@ router.post('/:groupId', requireRole('student'), async (req: Request, res: Respo
 
   // Cannot resubmit an approved proposal
   if (current?.status === 'approved') {
+    fs.unlinkSync(req.file.path)
     res.status(409).json({ error: 'Proposal has already been approved' })
     return
   }
 
   const newVersion = (current?.version ?? 0) + 1
+  const fileUrl = `/uploads/${req.file.filename}`
 
   const [proposal] = await query<DbProposal>(
     `INSERT INTO proposals (group_id, title, abstract, file_url, status, version)
      VALUES ($1, $2, $3, $4, 'pending', $5)
      RETURNING *`,
-    [groupId, title.trim(), abstract.trim(), fileUrl ?? null, newVersion]
+    [groupId, title.trim(), abstract.trim(), fileUrl, newVersion]
   )
 
   await audit(userId, 'proposal.submitted', 'proposal', proposal.id, {

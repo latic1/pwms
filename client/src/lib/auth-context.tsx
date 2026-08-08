@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
+import { mutate as globalMutate } from 'swr'
 import type { User } from '@/types'
 import { API_BASE } from './api'
 
@@ -74,6 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
     })
+    // Wipe any cached data left behind by a previous account in this tab —
+    // SWR keys like `/groups/my` are shared across every user, so without
+    // this a newly logged-in user can briefly see the last user's data.
+    await globalMutate(() => true, undefined, { revalidate: false })
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
     setUser(data.user)
@@ -84,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     setUser(null)
+    globalMutate(() => true, undefined, { revalidate: false })
     router.push('/login')
   }, [router])
 

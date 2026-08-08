@@ -15,7 +15,7 @@ const roles = [
 const walkthroughs: Record<string, { step: number; title: string; desc: string; tip?: string }[]> = {
   student: [
     { step: 1, title: 'Sign in',                  desc: 'Log in with your university email and password. You\'ll be taken to your student dashboard automatically.' },
-    { step: 2, title: 'Create or join a group',    desc: 'Go to My Group. Either create a new group (you become the leader) or enter an invite code from a classmate to join their group. Groups are capped at 3 members.', tip: 'Only the group leader can see and share the invite code — ask your leader to send it to you.' },
+    { step: 2, title: 'Create or join a group',    desc: 'Go to My Group. Either create a new group (you become the leader) or enter an invite code from a classmate to join their group. Groups are capped at 4 members.', tip: 'Only the group leader can see and share the invite code — ask your leader to send it to you.' },
     { step: 3, title: 'Submit your proposal',      desc: 'Navigate to Proposal. Upload your project proposal PDF and fill in the title and abstract. Your supervisor will approve or reject it with comments.', tip: 'You can resubmit as many times as needed until it\'s approved.' },
     { step: 4, title: 'Track tasks',               desc: 'Under Tasks, you\'ll see work items assigned to your group. Move them through Pending → In Progress → Under Review → Done as you complete them.' },
     { step: 5, title: 'Upload documents',          desc: 'Use the Documents page to upload progress reports, your final report, and any supporting files (max 20 MB each).' },
@@ -50,7 +50,7 @@ const walkthroughs: Record<string, { step: number; title: string; desc: string; 
 const faqs = [
   {
     q: 'How many students can be in one group?',
-    a: 'Groups are capped at 3 members. This is enforced by the system and cannot be changed without admin intervention.',
+    a: 'Groups are capped at 4 members. This is enforced by the system and cannot be changed without admin intervention.',
   },
   {
     q: 'Can I leave a group after joining?',

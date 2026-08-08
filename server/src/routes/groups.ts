@@ -209,13 +209,13 @@ router.post('/join', requireRole('student'), validate(joinGroupSchema), async (r
     return
   }
 
-  // Enforce max 3 members
+  // Enforce max 4 members
   const [{ count }] = await query<{ count: string }>(
     'SELECT COUNT(*) FROM group_members WHERE group_id = $1',
     [group.id]
   )
-  if (parseInt(count) >= 3) {
-    res.status(409).json({ error: 'This group is already full (max 3 members)' })
+  if (parseInt(count) >= 4) {
+    res.status(409).json({ error: 'This group is already full (max 4 members)' })
     return
   }
 
