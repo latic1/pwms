@@ -25,8 +25,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(email.trim().toLowerCase(), password)
-    } catch {
-      setError('Invalid email or password.')
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Invalid email or password.')
     } finally {
       setLoading(false)
     }

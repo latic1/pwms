@@ -11,6 +11,7 @@ export interface User {
   program?: string
   createdAt?: string
   mustChangePassword?: boolean
+  isActive?: boolean
 }
 
 export interface GroupMember {

@@ -36,28 +36,38 @@ interface DbUser {
   department: string | null
   program: string | null
   created_at: string
+  is_active: boolean
 }
 
 // ─── GET /admin/users ─────────────────────────────────────────────────────────
 
 router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const { role } = req.query
+  const { role, active } = req.query
   const validRoles = ['student', 'supervisor', 'admin']
 
-  const users =
-    typeof role === 'string' && validRoles.includes(role)
-      ? await query<DbUser>(
-          `SELECT id, name, email, role, phone, index_number, department, program, created_at
-           FROM users
-           WHERE role = $1
-           ORDER BY created_at DESC`,
-          [role]
-        )
-      : await query<DbUser>(
-          `SELECT id, name, email, role, phone, index_number, department, program, created_at
-           FROM users
-           ORDER BY created_at DESC`
-        )
+  // Deactivated accounts stay listed for the admin management page (so they
+  // can be reactivated), but pick-lists — e.g. "assign supervisor" — pass
+  // ?active=true to exclude them.
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (typeof role === 'string' && validRoles.includes(role)) {
+    params.push(role)
+    conditions.push(`role = $${params.length}`)
+  }
+  if (active === 'true') {
+    conditions.push('is_active = TRUE')
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const users = await query<DbUser>(
+    `SELECT id, name, email, role, phone, index_number, department, program, created_at, is_active
+     FROM users
+     ${where}
+     ORDER BY created_at DESC`,
+    params
+  )
 
   res.json(users.map(toSafeUser))
 })
@@ -105,7 +115,7 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
   const [newUser] = await query<DbUser>(
     `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program, must_change_password)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
-     RETURNING id, name, email, role, phone, index_number, department, program, created_at`,
+     RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
     [
       name.trim(),
       email.toLowerCase().trim(),
@@ -258,7 +268,7 @@ router.post('/bulk', upload.single('file'), async (req: Request, res: Response):
     const [newUser] = await query<DbUser>(
       `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program, must_change_password)
        VALUES ($1, $2, $3, 'student', $4, $5, $6, $7, TRUE)
-       RETURNING id, name, email, role, phone, index_number, department, program, created_at`,
+       RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
       [name, email, defaultPasswordHash, phone || null, indexNumber || null, department || null, program || null]
     )
 
@@ -302,23 +312,59 @@ router.post('/:id/reset-password', async (req: Request, res: Response): Promise<
 
 // ─── DELETE /admin/users/:id ──────────────────────────────────────────────────
 
+// Deactivate rather than hard-delete: most tables referencing users (groups,
+// tasks, documents, messages, grades) intentionally have no ON DELETE cascade
+// so those records survive — a real DELETE would just fail with a foreign
+// key violation the moment a student has any activity. Deactivating signs
+// the account out, blocks login, and hides it from active pick-lists while
+// preserving everything it created.
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params
 
-  // Prevent deleting yourself
+  // Prevent deactivating yourself
   if (id === req.user!.sub) {
-    res.status(400).json({ error: 'You cannot delete your own account' })
+    res.status(400).json({ error: 'You cannot deactivate your own account' })
     return
   }
 
-  const user = await queryOne('SELECT id FROM users WHERE id = $1', [id])
+  const user = await queryOne<DbUser>('SELECT id, role, is_active FROM users WHERE id = $1', [id])
   if (!user) {
     res.status(404).json({ error: 'User not found' })
     return
   }
 
-  await query('DELETE FROM users WHERE id = $1', [id])
+  // Don't let the last active admin lock everyone out
+  if (user.role === 'admin') {
+    const [{ count }] = await query<{ count: string }>(
+      "SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = TRUE"
+    )
+    if (parseInt(count) <= 1) {
+      res.status(400).json({ error: 'Cannot deactivate the last active admin' })
+      return
+    }
+  }
+
+  await query('UPDATE users SET is_active = FALSE WHERE id = $1', [id])
   res.status(204).send()
+})
+
+// ─── POST /admin/users/:id/reactivate ─────────────────────────────────────────
+
+router.post('/:id/reactivate', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params
+
+  const user = await queryOne<DbUser>('SELECT id FROM users WHERE id = $1', [id])
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const [updated] = await query<DbUser>(
+    `UPDATE users SET is_active = TRUE WHERE id = $1
+     RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
+    [id]
+  )
+  res.json(toSafeUser(updated))
 })
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -334,6 +380,7 @@ function toSafeUser(u: DbUser) {
     department:  u.department,
     program:     u.program,
     createdAt:   u.created_at,
+    isActive:    u.is_active,
   }
 }
 

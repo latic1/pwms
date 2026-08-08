@@ -32,6 +32,7 @@ interface DbUser {
   program: string | null
   expertise: string | null
   must_change_password: boolean
+  is_active: boolean
 }
 
 // ─── POST /auth/login ─────────────────────────────────────────────────────────
@@ -60,6 +61,11 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
 
   if (!passwordMatch) {
     res.status(401).json({ error: 'Invalid email or password' })
+    return
+  }
+
+  if (!user.is_active) {
+    res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' })
     return
   }
 
@@ -97,14 +103,19 @@ router.post('/refresh', validate(refreshSchema), async (req: Request, res: Respo
   try {
     const payload = verifyRefreshToken(refreshToken)
 
-    // Confirm user still exists and role hasn't changed
+    // Confirm user still exists, is still active, and role hasn't changed
     const user = await queryOne<DbUser>(
-      'SELECT id, email, role FROM users WHERE id = $1',
+      'SELECT id, email, role, is_active FROM users WHERE id = $1',
       [payload.sub]
     )
 
     if (!user) {
       res.status(401).json({ error: 'User no longer exists' })
+      return
+    }
+
+    if (!user.is_active) {
+      res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' })
       return
     }
 
@@ -121,13 +132,18 @@ router.post('/refresh', validate(refreshSchema), async (req: Request, res: Respo
 
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   const user = await queryOne<DbUser>(
-    `SELECT id, name, email, role, index_number, department, program, expertise, must_change_password
+    `SELECT id, name, email, role, index_number, department, program, expertise, must_change_password, is_active
      FROM users WHERE id = $1`,
     [req.user!.sub]
   )
 
   if (!user) {
     res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  if (!user.is_active) {
+    res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' })
     return
   }
 

@@ -8,7 +8,7 @@ import api from '@/lib/api'
 import type { Panel } from '@/types'
 
 function PanelDetail({ panel, onClose, onChanged }: { panel: Panel; onClose: () => void; onChanged: () => void }) {
-  const { users: supervisors } = useUsers('supervisor')
+  const { users: supervisors } = useUsers('supervisor', { activeOnly: true })
   const { groups, mutate: mutateGroups } = useGroups()
 
   const [name,      setName]      = useState(panel.name)

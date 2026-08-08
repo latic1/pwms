@@ -370,13 +370,22 @@ export default function UsersPage() {
     }
   }
 
-  async function handleRemove(u: User) {
-    if (!confirm(`Remove ${u.name}? This cannot be undone.`)) return
+  async function handleDeactivate(u: User) {
+    if (!confirm(`Deactivate ${u.name}? They'll be signed out and won't be able to log in. Their groups, documents, and grades are kept, and you can reactivate them anytime.`)) return
     try {
       await api.delete(`/admin/users/${u.id}`)
       mutate()
     } catch (err: any) {
-      alert(err?.response?.data?.error ?? 'Failed to remove user.')
+      alert(err?.response?.data?.error ?? 'Failed to deactivate user.')
+    }
+  }
+
+  async function handleReactivate(u: User) {
+    try {
+      await api.post(`/admin/users/${u.id}/reactivate`)
+      mutate()
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Failed to reactivate user.')
     }
   }
 
@@ -591,17 +600,18 @@ export default function UsersPage() {
               <th className="text-left px-5 py-3 font-medium text-gray-600">Email</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600 hidden md:table-cell">Index / Faculty</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600">Role</th>
+              <th className="text-left px-5 py-3 font-medium text-gray-600">Status</th>
               <th className="px-5 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-10 text-gray-400">No users found.</td>
+                <td colSpan={6} className="text-center py-10 text-gray-400">No users found.</td>
               </tr>
             ) : (
               filtered.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${u.isActive === false ? 'opacity-50' : ''}`}>
                   <td className="px-5 py-3 font-medium text-gray-800">{u.name}</td>
                   <td className="px-5 py-3 text-gray-500 text-xs">{u.email}</td>
                   <td className="px-5 py-3 hidden md:table-cell">
@@ -636,6 +646,13 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="px-5 py-3">
+                    {u.isActive === false ? (
+                      <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-gray-100 text-gray-500">Deactivated</span>
+                    ) : (
+                      <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-emerald-100 text-emerald-700">Active</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-3">
                       <button
                         onClick={() => handleResetPassword(u)}
@@ -643,12 +660,21 @@ export default function UsersPage() {
                       >
                         Reset password
                       </button>
-                      <button
-                        onClick={() => handleRemove(u)}
-                        className="text-xs text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        Remove
-                      </button>
+                      {u.isActive === false ? (
+                        <button
+                          onClick={() => handleReactivate(u)}
+                          className="text-xs text-emerald-600 hover:text-emerald-800 transition-colors whitespace-nowrap"
+                        >
+                          Reactivate
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDeactivate(u)}
+                          className="text-xs text-red-500 hover:text-red-700 transition-colors whitespace-nowrap"
+                        >
+                          Deactivate
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

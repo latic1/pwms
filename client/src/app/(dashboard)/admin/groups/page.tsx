@@ -7,7 +7,7 @@ import api from '@/lib/api'
 
 function GroupDetail({ groupId, onClose }: { groupId: string; onClose: () => void }) {
   const { group, mutate } = useGroup(groupId)
-  const { users: supervisors } = useUsers('supervisor')
+  const { users: supervisors } = useUsers('supervisor', { activeOnly: true })
 
   const [editingSupervisor, setEditingSupervisor] = useState(false)
   const [newSupervisorId,   setNewSupervisorId]   = useState('')
