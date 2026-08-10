@@ -142,7 +142,7 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
 
 router.patch('/:id', validate(updateUserSchema), async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params
-  const { name, role, indexNumber, department, program } = req.body
+  const { name, email, phone, role, indexNumber, department, program } = req.body
 
   const user = await queryOne<DbUser>('SELECT * FROM users WHERE id = $1', [id])
   if (!user) {
@@ -150,16 +150,39 @@ router.patch('/:id', validate(updateUserSchema), async (req: Request, res: Respo
     return
   }
 
+  if (email) {
+    const dupEmail = await queryOne('SELECT id FROM users WHERE email = $1 AND id != $2', [email, id])
+    if (dupEmail) {
+      res.status(409).json({ error: 'A user with that email already exists' })
+      return
+    }
+  }
+
+  const nextRole = role ?? user.role
+  if (nextRole === 'student' && indexNumber) {
+    const dupIndex = await queryOne('SELECT id FROM users WHERE index_number = $1 AND id != $2', [indexNumber, id])
+    if (dupIndex) {
+      res.status(409).json({ error: 'A student with that index number already exists' })
+      return
+    }
+  }
+
   const updatedUser = await queryOne<DbUser>(
     `UPDATE users
      SET name         = COALESCE($1, name),
-         role         = COALESCE($2, role),
-         index_number = CASE WHEN $2 = 'student' THEN COALESCE($3, index_number) ELSE NULL END,
-         department   = CASE WHEN $2 = 'student' THEN COALESCE($4, department)   ELSE NULL END,
-         program      = CASE WHEN $2 = 'student' THEN COALESCE($5, program)      ELSE NULL END
-     WHERE id = $6
-     RETURNING id, name, email, role, index_number, department, program, created_at`,
-    [name ?? null, role ?? null, indexNumber ?? null, department ?? null, program ?? null, id]
+         email        = COALESCE($2, email),
+         phone        = COALESCE($3, phone),
+         role         = $4,
+         index_number = CASE WHEN $4 = 'student' THEN COALESCE($5, index_number) ELSE NULL END,
+         department   = CASE WHEN $4 = 'student' THEN COALESCE($6, department)   ELSE NULL END,
+         program      = CASE WHEN $4 = 'student' THEN COALESCE($7, program)      ELSE NULL END
+     WHERE id = $8
+     RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
+    // nextRole (not the raw `role` field) drives both the role column and the
+    // student-fields CASE — otherwise an edit that doesn't touch role (e.g.
+    // just fixing a typo'd name) would evaluate `NULL = 'student'` as false
+    // and wipe the student's index number/department/program to NULL.
+    [name ?? null, email ?? null, phone ?? null, nextRole, indexNumber ?? null, department ?? null, program ?? null, id]
   )
 
   res.json(toSafeUser(updatedUser!))

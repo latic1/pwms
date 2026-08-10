@@ -285,6 +285,133 @@ function BulkImportPanel({ onDone }: { onDone: () => void }) {
   )
 }
 
+// ─── Edit user ────────────────────────────────────────────────────────────────
+
+function EditUserModal({ user, onClose, onSaved }: { user: User; onClose: () => void; onSaved: () => void }) {
+  const [name,        setName]        = useState(user.name)
+  const [email,       setEmail]       = useState(user.email)
+  const [phone,       setPhone]       = useState('')
+  const [indexNumber, setIndexNumber] = useState(user.indexNumber ?? '')
+  const [department,  setDepartment]  = useState(user.department ?? '')
+  const [program,     setProgram]     = useState(user.program ?? '')
+  const [error,       setError]       = useState('')
+  const [saving,      setSaving]      = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setSaving(true)
+    try {
+      await api.patch(`/admin/users/${user.id}`, {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        // Omit entirely when left blank — an empty string would overwrite
+        // the existing phone number instead of leaving it untouched.
+        ...(phone.trim() && { phone: phone.trim() }),
+        ...(user.role === 'student' && {
+          indexNumber: indexNumber.trim(),
+          department:  department.trim(),
+          program:     program.trim(),
+        }),
+      })
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Failed to update user.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-lg font-semibold text-gray-900">Edit {user.name}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-light">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Phone number <span className="text-gray-400 font-normal">(leave blank to keep current)</span>
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 0246314915"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          {user.role === 'student' && (
+            <div className="grid grid-cols-1 gap-4 border-t pt-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Index Number</label>
+                <input
+                  value={indexNumber}
+                  onChange={(e) => setIndexNumber(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Faculty</label>
+                <input
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Program</label>
+                <input
+                  value={program}
+                  onChange={(e) => setProgram(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function UsersPage() {
   const { users, mutate } = useUsers()
 
@@ -292,6 +419,7 @@ export default function UsersPage() {
   const [roleFilter,  setRoleFilter]  = useState<Role | 'all'>('all')
   const [showForm,    setShowForm]    = useState(false)
   const [editingId,   setEditingId]   = useState<string | null>(null)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
   const [formError,   setFormError]   = useState('')
   const [saving,      setSaving]      = useState(false)
   const [newCreds,    setNewCreds]    = useState<Credentials | null>(null)
@@ -655,6 +783,12 @@ export default function UsersPage() {
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-3">
                       <button
+                        onClick={() => setEditingUser(u)}
+                        className="text-xs text-gray-500 hover:text-gray-800 transition-colors whitespace-nowrap"
+                      >
+                        Edit
+                      </button>
+                      <button
                         onClick={() => handleResetPassword(u)}
                         className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors whitespace-nowrap"
                       >
@@ -683,6 +817,14 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={() => mutate()}
+        />
+      )}
     </div>
   )
 }

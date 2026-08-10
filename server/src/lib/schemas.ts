@@ -51,8 +51,13 @@ export const createUserSchema = z.object({
 })
 
 export const updateUserSchema = z.object({
-  role: z.enum(ROLES, { error: 'Invalid role' }).optional(),
-  name: z.string().min(1).max(100).trim().optional(),
+  role:        z.enum(ROLES, { error: 'Invalid role' }).optional(),
+  name:        z.string().min(1).max(100).trim().optional(),
+  email:       z.string().email('Invalid email address').max(254).trim().toLowerCase().optional(),
+  phone:       z.string().min(9, 'Phone number looks too short').max(20).trim().optional(),
+  indexNumber: z.string().max(50).trim().optional(),
+  department:  z.string().max(100).trim().optional(),
+  program:     z.string().max(100).trim().optional(),
 })
 
 // ─── Groups ───────────────────────────────────────────────────────────────────
