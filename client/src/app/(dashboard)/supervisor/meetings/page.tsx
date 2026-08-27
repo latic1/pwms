@@ -27,7 +27,6 @@ export default function MeetingsPage() {
 
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedGroup && groups.length > 0) return
     const groupId = selectedGroup || groups[0]?.id
     if (!groupId) return
     setScheduling(true)
@@ -73,16 +72,24 @@ export default function MeetingsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Meetings</h1>
           <p className="text-sm text-gray-500 mt-1">Schedule and manage meetings with your groups</p>
         </div>
-        <button
-          onClick={() => { setShowForm(!showForm); setScheduleError('') }}
-          className="px-4 py-2 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-700 transition-colors"
-        >
-          {showForm ? 'Cancel' : '+ Schedule Meeting'}
-        </button>
+        {groups.length > 0 && (
+          <button
+            onClick={() => { setShowForm(!showForm); setScheduleError('') }}
+            className="px-4 py-2 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-700 transition-colors"
+          >
+            {showForm ? 'Cancel' : '+ Schedule Meeting'}
+          </button>
+        )}
       </div>
 
+      {groups.length === 0 && (
+        <div className="rounded-lg bg-gray-50 border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500">
+          You have no groups assigned yet — ask an admin to assign one before scheduling a meeting.
+        </div>
+      )}
+
       {/* Schedule form */}
-      {showForm && (
+      {showForm && groups.length > 0 && (
         <div className="bg-white rounded-xl border shadow-sm p-6">
           <h2 className="font-semibold text-gray-800 mb-4">New Meeting</h2>
           <form onSubmit={handleSchedule} className="space-y-4">
