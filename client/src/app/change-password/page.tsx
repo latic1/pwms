@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import api from '@/lib/api'
+import { getLoginPath } from '@/lib/loginPath'
 
 export default function ForcedChangePasswordPage() {
   const { user, loading, refreshUser, logout } = useAuth()
@@ -19,7 +20,7 @@ export default function ForcedChangePasswordPage() {
   useEffect(() => {
     if (loading) return
     if (!user) {
-      router.replace('/login')
+      router.replace(getLoginPath())
     } else if (!user.mustChangePassword) {
       router.replace('/')
     }

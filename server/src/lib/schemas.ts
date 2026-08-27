@@ -5,6 +5,10 @@ import { z } from 'zod'
 export const loginSchema = z.object({
   email:    z.string().email('Invalid email address').max(254),
   password: z.string().min(1, 'Password is required').max(128),
+  // Which sign-in page this came from — 'student' or 'staff' (supervisor +
+  // admin). Optional so older/other callers keep working unchanged; when
+  // present the server enforces it matches the account's actual role.
+  channel:  z.enum(['student', 'staff']).optional(),
 })
 
 export const refreshSchema = z.object({

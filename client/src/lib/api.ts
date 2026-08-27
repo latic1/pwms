@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import { getLoginPath } from './loginPath'
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -54,7 +55,7 @@ api.interceptors.response.use(
       isRefreshing = false
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
+      window.location.href = getLoginPath()
       return Promise.reject(error)
     }
 
@@ -72,7 +73,7 @@ api.interceptors.response.use(
       processQueue(null, err)
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
+      window.location.href = getLoginPath()
       return Promise.reject(err)
     } finally {
       isRefreshing = false

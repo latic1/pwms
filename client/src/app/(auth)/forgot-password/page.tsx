@@ -1,14 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import api from '@/lib/api'
+import { getLoginPath } from '@/lib/loginPath'
 
 export default function ForgotPasswordPage() {
   const [email,     setEmail]     = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState('')
+  // Defaults to the student page (matches server rendering); corrected
+  // client-side once we can read which role last signed in on this device.
+  const [loginPath, setLoginPath] = useState('/login')
+  useEffect(() => setLoginPath(getLoginPath()), [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -50,7 +55,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400">
-          <Link href="/login" className="text-blue-600 hover:underline">Back to sign in</Link>
+          <Link href={loginPath} className="text-blue-600 hover:underline">Back to sign in</Link>
         </p>
       </div>
     )
@@ -66,7 +71,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h1 className="text-2xl font-bold text-gray-900">Forgot your password?</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Enter your email and we'll send you a reset code.
+          Enter your email and we&apos;ll send you a reset code.
         </p>
       </div>
 
@@ -102,7 +107,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        <Link href="/login" className="text-blue-600 hover:underline">Back to sign in</Link>
+        <Link href={loginPath} className="text-blue-600 hover:underline">Back to sign in</Link>
       </p>
     </div>
   )
