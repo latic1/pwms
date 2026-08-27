@@ -1,12 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useGroups, useGroup } from '@/hooks/useGroup'
 import { useProposal } from '@/hooks/useProposal'
 import { useTasks } from '@/hooks/useTasks'
 import { useDocuments } from '@/hooks/useDocuments'
-import { API_BASE } from '@/lib/api'
+import api, { API_BASE } from '@/lib/api'
 import type { Proposal } from '@/types'
 
 const proposalStatusStyles: Record<Proposal['status'], string> = {
@@ -25,9 +24,34 @@ const taskStatusStyles: Record<string, string> = {
 
 function GroupDetail({ groupId }: { groupId: string }) {
   const { group }     = useGroup(groupId)
-  const { proposal }  = useProposal(groupId)
+  const { proposal, mutate: mutateProposal } = useProposal(groupId)
   const { tasks }     = useTasks(groupId)
   const { documents } = useDocuments(groupId)
+
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewBusy,    setReviewBusy]    = useState(false)
+  const [reviewError,   setReviewError]   = useState('')
+
+  async function handleReview(status: 'approved' | 'rejected' | 'changes_requested') {
+    if (status !== 'approved' && !reviewComment.trim()) {
+      setReviewError('A comment is required when rejecting or requesting changes.')
+      return
+    }
+    setReviewError(''); setReviewBusy(true)
+    try {
+      await api.patch(`/proposals/${groupId}/review`, {
+        status,
+        supervisorComment: reviewComment.trim() || undefined,
+      })
+      await mutateProposal()
+      setReviewComment('')
+    } catch (err: any) {
+      setReviewError(err?.response?.data?.error ?? 'Failed to submit review.')
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
   if (!group) return <div className="text-sm text-gray-400 p-4">Loading...</div>
 
   return (
@@ -68,7 +92,10 @@ function GroupDetail({ groupId }: { groupId: string }) {
                 {proposal.status}
               </span>
             </div>
-            <p className="text-xs text-gray-500 line-clamp-2">{proposal.abstract}</p>
+            <p className="text-xs text-gray-500 whitespace-pre-wrap">{proposal.abstract}</p>
+            {proposal.supervisorComment && (
+              <p className="text-xs text-gray-500 italic">Feedback given: &ldquo;{proposal.supervisorComment}&rdquo;</p>
+            )}
             <div className="flex items-center gap-3">
               <a
                 href={`${API_BASE}${proposal.fileUrl}`}
@@ -78,12 +105,44 @@ function GroupDetail({ groupId }: { groupId: string }) {
               >
                 Download PDF
               </a>
-              {proposal.status === 'pending' && (
-                <span className="text-xs text-gray-400">
-                  Awaiting examination panel review
-                </span>
-              )}
             </div>
+
+            {/* Accept / decline controls */}
+            {proposal.status === 'pending' && (
+              <div className="border-t pt-3 space-y-2">
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  rows={2}
+                  placeholder="Feedback for the group (required for reject / request changes)..."
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                />
+                {reviewError && <p className="text-xs text-red-600">{reviewError}</p>}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleReview('approved')}
+                    disabled={reviewBusy}
+                    className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleReview('changes_requested')}
+                    disabled={reviewBusy}
+                    className="px-3 py-1.5 rounded-md bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 disabled:opacity-50"
+                  >
+                    Request changes
+                  </button>
+                  <button
+                    onClick={() => handleReview('rejected')}
+                    disabled={reviewBusy}
+                    className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -178,7 +237,7 @@ export default function SupervisorGroupsPage() {
         </div>
       )}
 
-      {selectedId && <GroupDetail groupId={selectedId} />}
+      {selectedId && <GroupDetail key={selectedId} groupId={selectedId} />}
     </div>
   )
 }

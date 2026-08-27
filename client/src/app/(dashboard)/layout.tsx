@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { useAuth } from '@/lib/auth-context'
@@ -41,7 +41,7 @@ function usePageTitle(): string {
   return labels[segment] ?? segment.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function Header() {
+function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useAuth()
   const title = usePageTitle()
 
@@ -50,13 +50,24 @@ function Header() {
   })
 
   return (
-    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
-      <h1 className="text-base font-semibold text-gray-800">{title}</h1>
-      <div className="flex items-center gap-4">
-        <span className="text-xs text-gray-400 hidden sm:block">{now}</span>
+    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0 gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          onClick={onMenuClick}
+          aria-label="Open menu"
+          className="md:hidden shrink-0 -ml-1 p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-md"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </button>
+        <h1 className="text-base font-semibold text-gray-800 truncate">{title}</h1>
+      </div>
+      <div className="flex items-center gap-4 shrink-0">
+        <span className="text-xs text-gray-400 hidden lg:block">{now}</span>
         {user && (
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
+            <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
               {user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
             <span className="text-sm font-medium text-gray-700 hidden sm:block">{user.name}</span>
@@ -70,6 +81,17 @@ function Header() {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // Close the mobile drawer automatically on navigation. Adjusted during
+  // render (comparing against the last-seen pathname) rather than in an
+  // effect, per React's guidance for resetting state when a prop changes.
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname)
+    setMobileNavOpen(false)
+  }
 
   useEffect(() => {
     if (loading) return
@@ -99,11 +121,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar />
+      <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
       <div className="flex flex-col flex-1 min-w-0">
-        <Header />
-        <main className="flex-1 overflow-y-auto">
-          <div className="px-6 py-6 max-w-6xl mx-auto">
+        <Header onMenuClick={() => setMobileNavOpen(true)} />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="px-4 sm:px-6 py-6 max-w-6xl mx-auto">
             {children}
           </div>
         </main>

@@ -267,7 +267,7 @@ export default function LandingPage() {
               Read the full guide →
             </Link>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {steps.map((s, i) => (
               <div key={s.title} className="bg-white border rounded-xl p-4 shadow-sm">
                 <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center mb-3">

@@ -49,7 +49,13 @@ const roleMeta: Record<Role, { label: string; accent: string; dot: string }> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Whether the mobile off-canvas drawer is open. Ignored at md+ where the sidebar is always visible. */
+  open: boolean
+  onClose: () => void
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
 
@@ -60,73 +66,98 @@ export function Sidebar() {
   const initials = user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <aside className="w-64 shrink-0 min-h-screen bg-[#0f1117] text-white flex flex-col border-r border-white/6">
+    <>
+      {/* Mobile backdrop — tap to dismiss the drawer */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Logo */}
-      <div className="px-5 py-5 flex items-center gap-3 border-b border-white/6">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-white leading-none">FYP-WMS</p>
-          <p className="text-[11px] text-gray-500 mt-0.5 leading-none">Project Management</p>
-        </div>
-      </div>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 h-full w-64 shrink-0 bg-[#0f1117] text-white flex flex-col border-r border-white/6 transform transition-transform duration-200 ease-in-out md:static md:translate-x-0 md:z-auto ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-2 mb-2">
-          Navigation
-        </p>
-        {items.map((item) => {
-          const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'))
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
-                active
-                  ? 'bg-white/10 text-white font-medium'
-                  : 'text-gray-400 hover:text-white hover:bg-white/6'
-              }`}
-            >
-              <span className={`shrink-0 transition-colors ${active ? 'text-white' : 'text-gray-500 group-hover:text-gray-300'}`}>
-                {item.icon}
-              </span>
-              {item.label}
-              {active && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-              )}
-            </Link>
-          )
-        })}
-      </nav>
-
-      {/* User profile */}
-      <div className="px-3 pb-4 border-t border-white/6 pt-3">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/6 transition-colors group">
-          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-            {initials}
+        {/* Logo */}
+        <div className="px-5 py-5 flex items-center gap-3 border-b border-white/6">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate leading-none mb-0.5">{user.name}</p>
-            <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
-              <span className={`text-[11px] font-medium ${meta.accent}`}>{meta.label}</span>
-            </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white leading-none">FYP-WMS</p>
+            <p className="text-[11px] text-gray-500 mt-0.5 leading-none">Project Management</p>
           </div>
           <button
-            onClick={logout}
-            title="Sign out"
-            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-white"
+            onClick={onClose}
+            aria-label="Close menu"
+            className="ml-auto md:hidden shrink-0 text-gray-500 hover:text-white p-1"
           >
-            <IconLogout />
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
-      </div>
-    </aside>
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-2 mb-2">
+            Navigation
+          </p>
+          {items.map((item) => {
+            const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'))
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
+                  active
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-white hover:bg-white/6'
+                }`}
+              >
+                <span className={`shrink-0 transition-colors ${active ? 'text-white' : 'text-gray-500 group-hover:text-gray-300'}`}>
+                  {item.icon}
+                </span>
+                {item.label}
+                {active && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                )}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* User profile */}
+        <div className="px-3 pb-4 border-t border-white/6 pt-3">
+          <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/6 transition-colors group">
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate leading-none mb-0.5">{user.name}</p>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
+                <span className={`text-[11px] font-medium ${meta.accent}`}>{meta.label}</span>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-gray-500 hover:text-white"
+            >
+              <IconLogout />
+            </button>
+          </div>
+        </div>
+      </aside>
+    </>
   )
 }
 

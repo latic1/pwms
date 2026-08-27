@@ -263,12 +263,14 @@ router.patch('/:groupId/review', requireRole('supervisor', 'admin'), validate(re
     return
   }
 
-  // Proposals are decided by the group's examination panel (or an admin)
-  if (role !== 'admin' && !(await isPanelMemberOfGroup(group, sub))) {
+  // Proposals are decided by the group's assigned supervisor, its
+  // examination panel, or an admin
+  const isAssignedSupervisor = group.supervisor_id === sub
+  if (role !== 'admin' && !isAssignedSupervisor && !(await isPanelMemberOfGroup(group, sub))) {
     res.status(403).json({
-      error: group.panel_id
-        ? 'Only members of this group\'s examination panel can review its proposal'
-        : 'This group has no examination panel assigned yet — ask an admin to assign one',
+      error: group.supervisor_id || group.panel_id
+        ? 'Only this group\'s supervisor, its examination panel, or an admin can review its proposal'
+        : 'This group has no supervisor or examination panel assigned yet — ask an admin to assign one',
     })
     return
   }

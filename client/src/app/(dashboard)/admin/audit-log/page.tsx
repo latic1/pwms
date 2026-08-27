@@ -80,7 +80,8 @@ export default function AuditLogPage() {
 
       {/* Log table */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="border-b bg-gray-50">
               <th className="text-left px-5 py-3 font-medium text-gray-600">Actor</th>
@@ -129,6 +130,7 @@ export default function AuditLogPage() {
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination */}
         {pagination && pagination.totalPages > 1 && (
