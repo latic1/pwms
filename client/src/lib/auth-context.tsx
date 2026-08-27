@@ -13,6 +13,7 @@ import axios from 'axios'
 import { mutate as globalMutate } from 'swr'
 import type { User } from '@/types'
 import { API_BASE } from './api'
+import { setLastRole, clearLastRole, getLoginPath } from './loginPath'
 
 interface LoginResponse {
   accessToken: string
@@ -23,7 +24,7 @@ interface LoginResponse {
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, channel?: 'student' | 'staff') => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { Authorization: `Bearer ${token}` },
         })
         setUser(data)
+        setLastRole(data.role)
       } catch {
         // Token expired or invalid — clear storage
         localStorage.removeItem('accessToken')
@@ -70,10 +72,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data)
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, channel?: 'student' | 'staff') => {
     const { data } = await axios.post<LoginResponse>(`${API_BASE}/auth/login`, {
       email,
       password,
+      channel,
     })
     // Wipe any cached data left behind by a previous account in this tab —
     // SWR keys like `/groups/my` are shared across every user, so without
@@ -81,16 +84,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await globalMutate(() => true, undefined, { revalidate: false })
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
+    setLastRole(data.user.role)
     setUser(data.user)
     router.push(data.user.mustChangePassword ? '/change-password' : '/')
   }, [router])
 
   const logout = useCallback(() => {
+    const loginPath = getLoginPath()
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
+    clearLastRole()
     setUser(null)
     globalMutate(() => true, undefined, { revalidate: false })
-    router.push('/login')
+    router.push(loginPath)
   }, [router])
 
   return (

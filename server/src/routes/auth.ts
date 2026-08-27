@@ -38,7 +38,7 @@ interface DbUser {
 // ─── POST /auth/login ─────────────────────────────────────────────────────────
 
 router.post('/login', validate(loginSchema), async (req: Request, res: Response): Promise<void> => {
-  const { email, password } = req.body
+  const { email, password, channel } = req.body
 
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password are required' })
@@ -66,6 +66,19 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
 
   if (!user.is_active) {
     res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' })
+    return
+  }
+
+  // Keep the student vs. staff sign-in pages genuinely separate, not just
+  // cosmetically — checked after the password match so a wrong-channel
+  // attempt reveals nothing an attacker couldn't already learn by guessing
+  // the password correctly.
+  if (channel === 'student' && user.role !== 'student') {
+    res.status(403).json({ error: 'This is the student sign-in page. Please use the staff sign-in to log in with a supervisor or admin account.' })
+    return
+  }
+  if (channel === 'staff' && user.role === 'student') {
+    res.status(403).json({ error: 'This is the staff sign-in page. Students should use the student sign-in page instead.' })
     return
   }
 

@@ -1,9 +1,10 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import api from '@/lib/api'
+import { getLoginPath } from '@/lib/loginPath'
 
 function ResetPasswordForm() {
   const router       = useRouter()
@@ -15,6 +16,10 @@ function ResetPasswordForm() {
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
   const [done,     setDone]     = useState(false)
+  // Defaults to the student page (matches server rendering); corrected
+  // client-side once we can read which role last signed in on this device.
+  const [loginPath, setLoginPath] = useState('/login')
+  useEffect(() => setLoginPath(getLoginPath()), [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -33,7 +38,7 @@ function ResetPasswordForm() {
     try {
       await api.post('/auth/reset-password', { token: otp.trim(), newPassword: password })
       setDone(true)
-      setTimeout(() => router.push('/login'), 2500)
+      setTimeout(() => router.push(loginPath), 2500)
     } catch (err: any) {
       setError(err?.response?.data?.error ?? 'Invalid or expired code. Please request a new one.')
     } finally {
@@ -127,10 +132,10 @@ function ResetPasswordForm() {
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        Didn't get a code?{' '}
+        Didn&apos;t get a code?{' '}
         <Link href="/forgot-password" className="text-blue-600 hover:underline">Request again</Link>
         {' · '}
-        <Link href="/login" className="text-blue-600 hover:underline">Back to sign in</Link>
+        <Link href={loginPath} className="text-blue-600 hover:underline">Back to sign in</Link>
       </p>
     </div>
   )

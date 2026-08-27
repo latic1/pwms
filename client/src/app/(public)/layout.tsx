@@ -146,6 +146,9 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
                   <Link href="/login" className="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium text-center">
                     Get started
                   </Link>
+                  <Link href="/staff-login" className="px-3 py-2 rounded-md text-xs text-gray-400 hover:text-gray-600 text-center">
+                    Staff sign in
+                  </Link>
                 </>
               )}
             </div>
@@ -171,6 +174,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             <Link href="/projects" className="hover:text-gray-700 transition-colors">Projects</Link>
             <Link href="/how-it-works" className="hover:text-gray-700 transition-colors">How it works</Link>
             <Link href="/login" className="hover:text-gray-700 transition-colors">Sign in</Link>
+            <Link href="/staff-login" className="hover:text-gray-700 transition-colors">Staff sign in</Link>
           </nav>
         </div>
       </footer>

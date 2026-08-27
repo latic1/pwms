@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { useAuth } from '@/lib/auth-context'
+import { getLoginPath } from '@/lib/loginPath'
 
 // Derive a readable page title from the pathname
 function usePageTitle(): string {
@@ -96,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (loading) return
     if (!user) {
-      router.replace('/login')
+      router.replace(getLoginPath())
     } else if (user.mustChangePassword) {
       router.replace('/change-password')
     }
