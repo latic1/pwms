@@ -1,14 +1,16 @@
 import { query } from '../db'
 import { smsDeadlineReminder } from './sms'
 import { emailDeadlineReminder } from './email'
+import { notifyMany } from './notify'
 
 interface ReminderMember {
+  id:    string
   name:  string
   email: string
   phone: string | null
 }
 
-/** Send a deadline reminder over both channels: email to all, SMS to those with a phone. */
+/** Send a deadline reminder over every channel: email + in-app to all, SMS to those with a phone. */
 async function notifyMembers(members: ReminderMember[], deadlineType: string, dateLabel: string) {
   await Promise.all([
     smsDeadlineReminder(
@@ -20,6 +22,13 @@ async function notifyMembers(members: ReminderMember[], deadlineType: string, da
       members.map((m) => ({ name: m.name, email: m.email })),
       deadlineType,
       dateLabel
+    ),
+    notifyMany(
+      members.map((m) => m.id),
+      'deadline.reminder',
+      `Deadline approaching: ${deadlineType}`,
+      `Due ${dateLabel}.`,
+      '/student'
     ),
   ])
 }
@@ -47,7 +56,7 @@ async function runCheck() {
 
   for (const period of submissionPeriods) {
     const members = await query<ReminderMember>(
-      `SELECT DISTINCT u.name, u.email, u.phone
+      `SELECT DISTINCT u.id, u.name, u.email, u.phone
        FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
        JOIN users u ON u.id = gm.user_id
@@ -78,7 +87,7 @@ async function runCheck() {
   for (const period of proposalPeriods) {
     // Only notify groups that haven't submitted a proposal yet
     const members = await query<ReminderMember>(
-      `SELECT DISTINCT u.name, u.email, u.phone
+      `SELECT DISTINCT u.id, u.name, u.email, u.phone
        FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
        JOIN users u ON u.id = gm.user_id

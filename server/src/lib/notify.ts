@@ -1,0 +1,34 @@
+import { query } from '../db'
+
+/**
+ * Create an in-app notification for one user (shown in the bell menu).
+ * Fire-and-forget — errors are logged but not re-thrown, matching audit().
+ */
+export async function notify(
+  userId: string,
+  type: string,
+  title: string,
+  body?: string | null,
+  link?: string | null
+): Promise<void> {
+  try {
+    await query(
+      `INSERT INTO notifications (user_id, type, title, body, link)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, type, title, body ?? null, link ?? null]
+    )
+  } catch (err) {
+    console.error('[notify] Failed to write notification:', err)
+  }
+}
+
+/** Same notification fanned out to several users (e.g. every member of a group). */
+export async function notifyMany(
+  userIds: string[],
+  type: string,
+  title: string,
+  body?: string | null,
+  link?: string | null
+): Promise<void> {
+  await Promise.all(userIds.map((id) => notify(id, type, title, body, link)))
+}

@@ -4,8 +4,17 @@ import { useAuth } from '@/lib/auth-context'
 import { useMyGroup } from '@/hooks/useGroup'
 import { useProposal } from '@/hooks/useProposal'
 import { useTasks } from '@/hooks/useTasks'
+import { useMeetings } from '@/hooks/useMeetings'
 import { useActivePeriod } from '@/hooks/usePeriods'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
+import api from '@/lib/api'
+import type { Meeting } from '@/types'
+
+const meetingStatusStyles: Record<Meeting['status'], string> = {
+  proposed:  'bg-yellow-100 text-yellow-700',
+  confirmed: 'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+}
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -22,10 +31,21 @@ export default function StudentDashboard() {
   const { group, isLoading: groupLoading } = useMyGroup()
   const { proposal } = useProposal(group?.id ?? null)
   const { tasks } = useTasks(group?.id ?? null)
+  const { meetings, mutate: mutateMeetings } = useMeetings(group?.id ?? null)
   const { period } = useActivePeriod()
 
   const doneTasks    = tasks.filter((t) => t.status === 'done').length
   const pendingTasks = tasks.filter((t) => t.status !== 'done').length
+  const upcomingMeetings = meetings.filter((m) => m.status !== 'completed')
+
+  async function confirmMeeting(meeting: Meeting) {
+    try {
+      await api.patch(`/meetings/${meeting.groupId}/${meeting.id}`, { status: 'confirmed' })
+      mutateMeetings()
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Failed to confirm meeting.')
+    }
+  }
 
   return (
     <>
@@ -116,6 +136,40 @@ export default function StudentDashboard() {
               )}
             </div>
           </div>
+
+          {upcomingMeetings.length > 0 && (
+            <div className="bg-white rounded-xl border p-5 shadow-sm">
+              <h2 className="font-semibold text-gray-800 mb-3">Upcoming Meetings</h2>
+              <div className="space-y-2">
+                {upcomingMeetings.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between gap-3 text-sm bg-gray-50 rounded-lg px-3 py-2 border">
+                    <div className="min-w-0">
+                      <p className="text-gray-700 truncate">
+                        {new Date(m.scheduledAt).toLocaleString([], {
+                          weekday: 'short', month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </p>
+                      {m.notes && <p className="text-xs text-gray-400 truncate">{m.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {m.status === 'proposed' && (
+                        <button
+                          onClick={() => confirmMeeting(m)}
+                          className="text-xs px-2.5 py-1 rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${meetingStatusStyles[m.status]}`}>
+                        {m.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

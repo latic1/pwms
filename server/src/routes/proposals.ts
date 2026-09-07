@@ -6,6 +6,7 @@ import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
+import { notifyMany } from '../lib/notify'
 import { smsProposalDecision } from '../lib/sms'
 import { emailProposalDecision } from '../lib/email'
 import { validate } from '../middleware/validate'
@@ -301,13 +302,25 @@ router.patch('/:groupId/review', requireRole('supervisor', 'admin'), validate(re
     groupId, version: proposal.version, comment: comment?.trim(),
   })
 
-  // Notify all group members — SMS for those with a phone, email for everyone
-  const members = await query<{ name: string; email: string; phone: string | null }>(
-    `SELECT u.name, u.email, u.phone
+  // Notify all group members — SMS for those with a phone, email + in-app for everyone
+  const members = await query<{ id: string; name: string; email: string; phone: string | null }>(
+    `SELECT u.id, u.name, u.email, u.phone
      FROM group_members gm
      JOIN users u ON u.id = gm.user_id
      WHERE gm.group_id = $1`,
     [groupId]
+  )
+  const decisionTitle = {
+    approved:          'Proposal approved',
+    rejected:          'Proposal rejected',
+    changes_requested: 'Changes requested on your proposal',
+  }[status as 'approved' | 'rejected' | 'changes_requested']
+  notifyMany(
+    members.map((m) => m.id),
+    `proposal.${status}`,
+    decisionTitle,
+    comment?.trim() || undefined,
+    '/student/proposal'
   )
   smsProposalDecision(
     members.filter((m) => m.phone).map((m) => ({ name: m.name, phone: m.phone! })),

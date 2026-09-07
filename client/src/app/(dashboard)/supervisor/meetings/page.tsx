@@ -25,6 +25,14 @@ export default function MeetingsPage() {
   const [scheduling,     setScheduling]     = useState(false)
   const [scheduleError,  setScheduleError]  = useState('')
 
+  // Editing an existing meeting (reschedule / change notes)
+  const [editingId,   setEditingId]   = useState<string | null>(null)
+  const [editDate,    setEditDate]    = useState('')
+  const [editTime,    setEditTime]    = useState('')
+  const [editNotes,   setEditNotes]   = useState('')
+  const [editBusy,    setEditBusy]    = useState(false)
+  const [editError,   setEditError]  = useState('')
+
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault()
     const groupId = selectedGroup || groups[0]?.id
@@ -54,6 +62,42 @@ export default function MeetingsPage() {
       mutate()
     } catch (err: any) {
       alert(err?.response?.data?.error ?? 'Failed to update meeting.')
+    }
+  }
+
+  function startEdit(m: Meeting) {
+    const d = new Date(m.scheduledAt)
+    setEditingId(m.id)
+    setEditDate(d.toISOString().slice(0, 10))
+    setEditTime(d.toTimeString().slice(0, 5))
+    setEditNotes(m.notes ?? '')
+    setEditError('')
+  }
+
+  async function handleSaveEdit(m: Meeting) {
+    setEditBusy(true)
+    setEditError('')
+    try {
+      await api.patch(`/meetings/${m.groupId}/${m.id}`, {
+        scheduledAt: new Date(`${editDate}T${editTime}`).toISOString(),
+        notes: editNotes.trim() || undefined,
+      })
+      await mutate()
+      setEditingId(null)
+    } catch (err: any) {
+      setEditError(err?.response?.data?.error ?? 'Failed to update meeting.')
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  async function handleDelete(m: Meeting) {
+    if (!confirm('Cancel this meeting? This cannot be undone.')) return
+    try {
+      await api.delete(`/meetings/${m.groupId}/${m.id}`)
+      mutate()
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Failed to cancel meeting.')
     }
   }
 
@@ -173,40 +217,106 @@ export default function MeetingsPage() {
         ) : (
           filtered.map((m) => (
             <div key={m.id} className="bg-white rounded-xl border shadow-sm p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {new Date(m.scheduledAt).toLocaleString([], {
-                      weekday: 'long', year: 'numeric', month: 'short',
-                      day: 'numeric', hour: '2-digit', minute: '2-digit',
-                    })}
-                  </p>
-                  {m.notes && (
-                    <p className="text-xs text-gray-400 mt-2 italic">"{m.notes}"</p>
-                  )}
-                </div>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${statusStyles[m.status]}`}>
-                  {m.status}
-                </span>
-              </div>
-
-              {m.status !== 'completed' && (
-                <div className="flex gap-2 mt-4">
-                  {m.status === 'proposed' && (
+              {editingId === m.id ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                      <input
+                        type="date"
+                        value={editDate}
+                        onChange={(e) => setEditDate(e.target.value)}
+                        required
+                        className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Time</label>
+                      <input
+                        type="time"
+                        value={editTime}
+                        onChange={(e) => setEditTime(e.target.value)}
+                        required
+                        className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Agenda / Notes</label>
+                    <textarea
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      rows={2}
+                      className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                    />
+                  </div>
+                  {editError && <p className="text-xs text-red-600">{editError}</p>}
+                  <div className="flex gap-2 justify-end">
                     <button
-                      onClick={() => updateStatus(m, 'confirmed')}
-                      className="text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+                      onClick={() => setEditingId(null)}
+                      className="text-xs px-3 py-1.5 rounded-md border text-gray-600 hover:bg-gray-50"
                     >
-                      Confirm
+                      Cancel
                     </button>
-                  )}
-                  <button
-                    onClick={() => updateStatus(m, 'completed')}
-                    className="text-xs px-3 py-1.5 rounded-md border border-green-300 text-green-700 hover:bg-green-50 transition-colors"
-                  >
-                    Mark Complete
-                  </button>
+                    <button
+                      onClick={() => handleSaveEdit(m)}
+                      disabled={editBusy || !editDate || !editTime}
+                      className="text-xs px-3 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      {editBusy ? 'Saving...' : 'Save changes'}
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {new Date(m.scheduledAt).toLocaleString([], {
+                          weekday: 'long', year: 'numeric', month: 'short',
+                          day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </p>
+                      {m.notes && (
+                        <p className="text-xs text-gray-400 mt-2 italic">&quot;{m.notes}&quot;</p>
+                      )}
+                    </div>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${statusStyles[m.status]}`}>
+                      {m.status}
+                    </span>
+                  </div>
+
+                  {m.status !== 'completed' && (
+                    <div className="flex gap-2 mt-4 flex-wrap">
+                      {m.status === 'proposed' && (
+                        <button
+                          onClick={() => updateStatus(m, 'confirmed')}
+                          className="text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                      )}
+                      <button
+                        onClick={() => updateStatus(m, 'completed')}
+                        className="text-xs px-3 py-1.5 rounded-md border border-green-300 text-green-700 hover:bg-green-50 transition-colors"
+                      >
+                        Mark Complete
+                      </button>
+                      <button
+                        onClick={() => startEdit(m)}
+                        className="text-xs px-3 py-1.5 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(m)}
+                        className="text-xs px-3 py-1.5 rounded-md border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Cancel meeting
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))

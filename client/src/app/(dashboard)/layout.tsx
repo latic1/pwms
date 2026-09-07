@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 import { useAuth } from '@/lib/auth-context'
 import { getLoginPath } from '@/lib/loginPath'
 
@@ -64,8 +65,9 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         </button>
         <h1 className="text-base font-semibold text-gray-800 truncate">{title}</h1>
       </div>
-      <div className="flex items-center gap-4 shrink-0">
+      <div className="flex items-center gap-3 shrink-0">
         <span className="text-xs text-gray-400 hidden lg:block">{now}</span>
+        <NotificationBell />
         {user && (
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">

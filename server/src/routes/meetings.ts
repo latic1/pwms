@@ -2,8 +2,25 @@ import { Router, Request, Response } from 'express'
 import { query, queryOne } from '../db'
 import { authenticate, requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
+import { notifyMany } from '../lib/notify'
 import { validate } from '../middleware/validate'
 import { createMeetingSchema } from '../lib/schemas'
+
+/** IDs of every member of a group — used to fan out meeting notifications. */
+async function groupMemberIds(groupId: string): Promise<string[]> {
+  const rows = await query<{ user_id: string }>(
+    'SELECT user_id FROM group_members WHERE group_id = $1',
+    [groupId]
+  )
+  return rows.map((r) => r.user_id)
+}
+
+function formatMeetingDate(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short',
+    year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
 
 const router = Router()
 router.use(authenticate)
@@ -139,6 +156,15 @@ router.post('/:groupId', requireRole('supervisor'), validate(createMeetingSchema
     meetingId: meeting.id, scheduledAt,
   })
 
+  const memberIds = await groupMemberIds(groupId)
+  notifyMany(
+    memberIds,
+    'meeting.scheduled',
+    'New meeting scheduled',
+    `Your supervisor scheduled a meeting for ${formatMeetingDate(meeting.scheduled_at)}.`,
+    '/student'
+  )
+
   res.status(201).json(formatMeeting(meeting))
 })
 
@@ -214,6 +240,24 @@ router.patch('/:groupId/:meetingId', async (req: Request, res: Response): Promis
     await audit(sub, `meeting.${status}`, 'group', groupId, { meetingId })
   }
 
+  // Notify the group when the supervisor actually changes something —
+  // not on a student's own confirm, and not on every no-op save
+  if (role === 'supervisor') {
+    if (newScheduledAt && newScheduledAt !== meeting.scheduled_at) {
+      const memberIds = await groupMemberIds(groupId)
+      notifyMany(
+        memberIds,
+        'meeting.rescheduled',
+        'Meeting rescheduled',
+        `Your meeting has been moved to ${formatMeetingDate(updated.scheduled_at)}.`,
+        '/student'
+      )
+    } else if (status === 'completed') {
+      const memberIds = await groupMemberIds(groupId)
+      notifyMany(memberIds, 'meeting.completed', 'Meeting marked complete', null, '/student')
+    }
+  }
+
   res.json(formatMeeting(updated))
 })
 
@@ -243,6 +287,16 @@ router.delete('/:groupId/:meetingId', requireRole('supervisor', 'admin'), async 
 
   await query('DELETE FROM meetings WHERE id = $1', [meetingId])
   await audit(sub, 'meeting.cancelled', 'group', groupId, { meetingId })
+
+  const memberIds = await groupMemberIds(groupId)
+  notifyMany(
+    memberIds,
+    'meeting.cancelled',
+    'Meeting cancelled',
+    `The meeting scheduled for ${formatMeetingDate(meeting.scheduled_at)} was cancelled.`,
+    '/student'
+  )
+
   res.status(204).send()
 })
 

@@ -32,7 +32,7 @@ export async function suggestTopics(
     'You are helping a final-year university student brainstorm project topics.',
     department ? `Student department: ${department}.` : '',
     `Student interests: ${interests.join(', ')}.`,
-    'Suggest exactly 5 distinct final-year project topics suited to these interests.',
+    'Suggest exactly 10 distinct final-year project topics suited to these interests.',
     'Respond with ONLY a JSON array (no markdown, no prose) of objects shaped like:',
     '[{"title": string, "description": string (1-2 sentences), "keywords": string[] (3-6 lowercase keywords)}]',
   ].filter(Boolean).join('\n')
