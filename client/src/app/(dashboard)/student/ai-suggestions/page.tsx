@@ -126,19 +126,27 @@ export default function AiSuggestionsPage() {
                 <p className="text-sm text-gray-500">No supervisors found.</p>
               ) : (
                 matches[i].map((m) => (
-                  <div key={m.supervisorId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                    <div>
-                      <p className="font-medium text-gray-700">{m.name}</p>
-                      <p className="text-xs text-gray-400">{m.email}</p>
-                      {m.matchedKeywords.length > 0 && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Matched: {m.matchedKeywords.join(', ')}
-                        </p>
-                      )}
+                  <div key={m.supervisorId} className="p-3 bg-gray-50 rounded-lg text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-700">{m.name}</p>
+                        <p className="text-xs text-gray-400">{m.email}</p>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium shrink-0">
+                        score {m.score}
+                      </span>
                     </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium shrink-0">
-                      score {m.score}
-                    </span>
+                    {m.reason && (
+                      <p className="text-xs text-gray-600 mt-2 flex items-start gap-1">
+                        <span className="shrink-0">✨</span>
+                        <span>{m.reason}</span>
+                      </p>
+                    )}
+                    {m.matchedKeywords.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1.5">
+                        Matched: {m.matchedKeywords.join(', ')}
+                      </p>
+                    )}
                   </div>
                 ))
               )}

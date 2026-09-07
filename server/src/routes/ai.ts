@@ -4,20 +4,20 @@ import { query, queryOne } from '../db'
 import { authenticate, requireRole } from '../middleware/authenticate'
 import { validate } from '../middleware/validate'
 import { suggestTopicsSchema, matchSupervisorsSchema } from '../lib/schemas'
-import { suggestTopics } from '../lib/gemini'
+import { suggestTopics, explainSupervisorMatches } from '../lib/gemini'
 import { rankSupervisors, SupervisorCandidate } from '../lib/supervisorMatch'
 import { audit } from '../lib/auditLog'
 
 const router = Router()
 router.use(authenticate)
 
-// Protects the free Gemini quota — this is the only route that calls out to it.
-const topicsLimiter = rateLimit({
+// Protects the free Gemini quota — shared by every route that calls out to it.
+const geminiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many topic suggestion requests, please try again later.' },
+  message: { error: 'Too many AI requests, please try again later.' },
 })
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ interface DbSupervisorCandidate {
 router.post(
   '/topics',
   requireRole('student'),
-  topicsLimiter,
+  geminiLimiter,
   validate(suggestTopicsSchema),
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user!.sub
@@ -104,6 +104,7 @@ router.get('/topics', requireRole('student'), async (req: Request, res: Response
 router.post(
   '/supervisor-matches',
   requireRole('student'),
+  geminiLimiter,
   validate(matchSupervisorsSchema),
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user!.sub
@@ -133,12 +134,38 @@ router.post(
 
     const matches = rankSupervisors(matchInput, keywords ?? [], student?.department ?? null)
 
+    // AI layer: re-rank this rule-based shortlist and add a one-line "why"
+    // per candidate. Best-effort — on any failure (quota, bad response) we
+    // fall back to the rule-based order with no explanation, never block.
+    const expertiseById = new Map(candidates.map((c) => [c.id, c.expertise]))
+    const explanations = await explainSupervisorMatches(
+      topicTitle,
+      keywords ?? [],
+      matches.map((m) => ({
+        supervisorId:    m.supervisorId,
+        name:            m.name,
+        expertise:       expertiseById.get(m.supervisorId) ?? null,
+        score:           m.score,
+        matchedKeywords: m.matchedKeywords,
+      }))
+    )
+
+    const reasonById = new Map(explanations.map((e) => [e.supervisorId, e.reason]))
+    const ordered = explanations.length === matches.length
+      ? explanations
+          .map((e) => matches.find((m) => m.supervisorId === e.supervisorId))
+          .filter((m): m is typeof matches[number] => Boolean(m))
+      : matches
+
+    const finalMatches = ordered.map((m) => ({ ...m, reason: reasonById.get(m.supervisorId) ?? null }))
+
     await audit(userId, 'ai.supervisor_match_requested', 'supervisor_match', null, {
       topicTitle,
       keywords,
+      aiExplained: explanations.length > 0,
     })
 
-    res.json(matches)
+    res.json(finalMatches)
   }
 )
 

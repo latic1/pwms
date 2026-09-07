@@ -179,6 +179,8 @@ export interface SupervisorMatch {
   email: string
   score: number
   matchedKeywords: string[]
+  /** One-line AI-generated fit explanation; null if the AI step was unavailable. */
+  reason?: string | null
 }
 
 export interface AcademicPeriod {
