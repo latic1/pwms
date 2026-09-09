@@ -1,12 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { useMyGroup } from '@/hooks/useGroup'
 import { useDocuments } from '@/hooks/useDocuments'
+import { useNotifications, markNotificationRead } from '@/hooks/useNotifications'
 import { DocumentCommentThread } from '@/components/documents/DocumentCommentThread'
 import api, { API_BASE } from '@/lib/api'
 import type { Document } from '@/types'
+
+/** Pulls the `doc=<id>` query param out of a notification link like "/student/documents?doc=abc". */
+function docIdFromLink(link: string | null): string | null {
+  if (!link || !link.includes('doc=')) return null
+  return link.split('doc=')[1].split('&')[0] || null
+}
 
 const typeStyles: Record<Document['type'], string> = {
   proposal:        'bg-blue-100 text-blue-700',
@@ -38,10 +46,13 @@ function FileIcon({ type }: { type: Document['type'] }) {
   )
 }
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
   const { user }  = useAuth()
   const { group } = useMyGroup()
   const { documents, mutate } = useDocuments(group?.id ?? null)
+  const { notifications, mutate: mutateNotifications } = useNotifications()
+  const searchParams   = useSearchParams()
+  const highlightDocId = searchParams.get('doc')
 
   const [filter,       setFilter]       = useState<Document['type'] | 'all'>('all')
   const [uploading,    setUploading]    = useState(false)
@@ -52,6 +63,16 @@ export default function DocumentsPage() {
 
   const isLeader = group?.leaderId === user?.id
   const filtered = filter === 'all' ? documents : documents.filter((d) => d.type === filter)
+
+  // Unread "new comment" notifications, keyed by which document they're about
+  const unreadCommentNotifs = notifications.filter((n) => n.type === 'document.commented' && !n.read)
+  const unreadDocIds = new Set(unreadCommentNotifs.map((n) => docIdFromLink(n.link)).filter(Boolean))
+
+  function clearUnreadFor(docId: string) {
+    const matches = unreadCommentNotifs.filter((n) => docIdFromLink(n.link) === docId)
+    if (matches.length === 0) return
+    Promise.all(matches.map((n) => markNotificationRead(n.id))).then(() => mutateNotifications())
+  }
 
   // Only leader can upload final_report — filter type options accordingly
   const availableTypes = isLeader
@@ -208,12 +229,26 @@ export default function DocumentsPage() {
                     Download
                   </a>
                 </div>
-                <DocumentCommentThread groupId={group.id} docId={doc.id} />
+                <DocumentCommentThread
+                  groupId={group.id}
+                  docId={doc.id}
+                  defaultOpen={doc.id === highlightDocId}
+                  hasUnread={unreadDocIds.has(doc.id)}
+                  onOpen={() => clearUnreadFor(doc.id)}
+                />
               </div>
             )
           })
         )}
       </div>
     </div>
+  )
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense>
+      <DocumentsPageContent />
+    </Suspense>
   )
 }

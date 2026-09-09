@@ -1,8 +1,88 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import api from '@/lib/api'
+import { isPushSupported, getExistingSubscription, enablePush, disablePush } from '@/lib/push'
+
+function PushNotificationsCard() {
+  const [supported,  setSupported]  = useState(true)
+  const [enabled,    setEnabled]    = useState(false)
+  const [permission, setPermission] = useState<NotificationPermission>('default')
+  const [loading,    setLoading]    = useState(true)
+  const [busy,       setBusy]       = useState(false)
+  const [error,      setError]      = useState('')
+
+  useEffect(() => {
+    async function check() {
+      if (!isPushSupported()) {
+        setSupported(false)
+        setLoading(false)
+        return
+      }
+      setPermission(Notification.permission)
+      const sub = await getExistingSubscription()
+      setEnabled(!!sub)
+      setLoading(false)
+    }
+    check()
+  }, [])
+
+  async function handleToggle() {
+    setBusy(true)
+    setError('')
+    try {
+      if (enabled) {
+        await disablePush()
+        setEnabled(false)
+      } else {
+        await enablePush()
+        setEnabled(true)
+        setPermission('granted')
+      }
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to update push notification settings.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (loading) return null
+
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <h2 className="font-semibold text-gray-800 mb-1">Push Notifications</h2>
+      <p className="text-sm text-gray-500 mb-4">
+        Get notified in your browser even when FYP-WMS isn&apos;t open.
+      </p>
+      {!supported ? (
+        <p className="text-sm text-gray-400">Not supported in this browser.</p>
+      ) : permission === 'denied' ? (
+        <p className="text-sm text-amber-600">
+          Notifications are blocked for this site. Enable them in your browser&apos;s site settings, then reload the page.
+        </p>
+      ) : (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm text-gray-700">
+            {enabled ? 'Enabled on this device' : 'Not enabled on this device'}
+          </span>
+          <button
+            onClick={handleToggle}
+            disabled={busy}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+              enabled
+                ? 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                : 'bg-gray-900 text-white hover:bg-gray-700'
+            }`}
+          >
+            {busy ? 'Working...' : enabled ? 'Disable' : 'Enable'}
+          </button>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -80,6 +160,8 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      <PushNotificationsCard />
 
       {/* Change password */}
       <div className="bg-white rounded-xl border shadow-sm p-6">

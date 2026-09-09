@@ -1,8 +1,11 @@
 import { query } from '../db'
+import { sendPushToUser } from './webPush'
 
 /**
- * Create an in-app notification for one user (shown in the bell menu).
- * Fire-and-forget — errors are logged but not re-thrown, matching audit().
+ * Create an in-app notification for one user (shown in the bell menu) and,
+ * if they've enabled it, push it to their browser too — even if the tab
+ * isn't open. Fire-and-forget — errors are logged but not re-thrown,
+ * matching audit().
  */
 export async function notify(
   userId: string,
@@ -20,6 +23,8 @@ export async function notify(
   } catch (err) {
     console.error('[notify] Failed to write notification:', err)
   }
+
+  sendPushToUser(userId, { title, body, link })
 }
 
 /** Same notification fanned out to several users (e.g. every member of a group). */

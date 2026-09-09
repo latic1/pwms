@@ -1,14 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDocumentComments, addDocumentComment } from '@/hooks/useDocumentComments'
 
-export function DocumentCommentThread({ groupId, docId }: { groupId: string; docId: string }) {
-  const [open, setOpen] = useState(false)
+interface DocumentCommentThreadProps {
+  groupId: string
+  docId: string
+  /** Open the thread immediately, e.g. when arriving from a notification link. */
+  defaultOpen?: boolean
+  /** Called once when the thread is opened — parent uses this to clear the unread badge. */
+  onOpen?: () => void
+  /** Show an "unread" badge on the toggle button until the thread is opened. */
+  hasUnread?: boolean
+}
+
+export function DocumentCommentThread({ groupId, docId, defaultOpen, onOpen, hasUnread }: DocumentCommentThreadProps) {
+  const [open, setOpen] = useState(!!defaultOpen)
   const { comments, mutate } = useDocumentComments(open ? groupId : null, open ? docId : null)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (open) onOpen?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -30,9 +46,12 @@ export function DocumentCommentThread({ groupId, docId }: { groupId: string; doc
     <div className="mt-2">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1.5"
       >
         {open ? 'Hide comments' : `Comments${comments.length ? ` (${comments.length})` : ''}`}
+        {!open && hasUnread && (
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="New comment" />
+        )}
       </button>
 
       {open && (

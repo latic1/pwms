@@ -21,6 +21,7 @@ import reportRoutes            from './routes/reports'
 import aiRoutes                from './routes/ai'
 import panelRoutes             from './routes/panels'
 import notificationRoutes      from './routes/notifications'
+import pushRoutes              from './routes/push'
 import { startDeadlineReminders } from './lib/deadlineReminder'
 
 dotenv.config()
@@ -84,6 +85,7 @@ app.use('/public',                 publicRoutes)
 app.use('/reports',                reportRoutes)
 app.use('/ai',                     aiRoutes)
 app.use('/notifications',          notificationRoutes)
+app.use('/push',                   pushRoutes)
 app.use('/uploads',                express.static('uploads'))
 
 // ─── 404 catch-all ────────────────────────────────────────────────────────────

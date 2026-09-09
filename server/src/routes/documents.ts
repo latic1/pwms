@@ -348,7 +348,7 @@ router.post(
         'document.commented',
         'New comment on your document',
         `${full!.author_name} commented on "${doc.file_name}".`,
-        '/student/documents'
+        `/student/documents?doc=${docId}`
       )
     }
 

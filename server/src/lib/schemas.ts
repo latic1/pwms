@@ -139,6 +139,20 @@ export const addDocumentCommentSchema = z.object({
   body: z.string().min(1, 'Comment cannot be empty').max(2000).trim(),
 })
 
+// ─── Push subscriptions ───────────────────────────────────────────────────────
+
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url('Invalid subscription endpoint'),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth:   z.string().min(1),
+  }),
+})
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url('Invalid subscription endpoint'),
+})
+
 // ─── Periods ─────────────────────────────────────────────────────────────────
 
 export const createPeriodSchema = z.object({
