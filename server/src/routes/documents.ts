@@ -5,6 +5,9 @@ import fs from 'fs'
 import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
+import { notifyMany } from '../lib/notify'
+import { validate } from '../middleware/validate'
+import { addDocumentCommentSchema } from '../lib/schemas'
 
 const router = Router()
 router.use(authenticate)
@@ -218,6 +221,123 @@ router.delete('/:groupId/:docId', async (req: Request, res: Response): Promise<v
   await audit(sub, 'document.deleted', 'document', docId, { groupId, fileName: doc.file_name })
   res.status(204).send()
 })
+
+// ─── Document comments ─────────────────────────────────────────────────────────
+
+interface DbDocumentComment {
+  id:          string
+  document_id: string
+  author_id:   string
+  body:        string
+  created_at:  string
+}
+
+interface DbDocumentCommentWithAuthor extends DbDocumentComment {
+  author_name: string
+  author_role: string
+}
+
+function formatComment(c: DbDocumentCommentWithAuthor) {
+  return {
+    id:         c.id,
+    documentId: c.document_id,
+    authorId:   c.author_id,
+    authorName: c.author_name,
+    authorRole: c.author_role,
+    body:       c.body,
+    createdAt:  c.created_at,
+  }
+}
+
+// ─── GET /documents/:groupId/:docId/comments — list comments on a document ────
+
+router.get('/:groupId/:docId/comments', async (req: Request, res: Response): Promise<void> => {
+  const groupId = p(req.params.groupId)
+  const docId   = p(req.params.docId)
+  const { sub, role } = req.user!
+
+  const ok = await assertMember(groupId, sub, role)
+  if (!ok) {
+    res.status(403).json({ error: 'Access denied' })
+    return
+  }
+
+  const doc = await queryOne('SELECT id FROM documents WHERE id = $1 AND group_id = $2', [docId, groupId])
+  if (!doc) {
+    res.status(404).json({ error: 'Document not found' })
+    return
+  }
+
+  const rows = await query<DbDocumentCommentWithAuthor>(
+    `SELECT dc.*, u.name AS author_name, u.role AS author_role
+     FROM document_comments dc
+     JOIN users u ON u.id = dc.author_id
+     WHERE dc.document_id = $1
+     ORDER BY dc.created_at`,
+    [docId]
+  )
+
+  res.json(rows.map(formatComment))
+})
+
+// ─── POST /documents/:groupId/:docId/comments — add a comment ─────────────────
+
+router.post(
+  '/:groupId/:docId/comments',
+  validate(addDocumentCommentSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const groupId = p(req.params.groupId)
+    const docId   = p(req.params.docId)
+    const { sub, role } = req.user!
+    const { body } = req.body
+
+    const ok = await assertMember(groupId, sub, role)
+    if (!ok) {
+      res.status(403).json({ error: 'Access denied' })
+      return
+    }
+
+    const doc = await queryOne<DbDocument>('SELECT * FROM documents WHERE id = $1 AND group_id = $2', [docId, groupId])
+    if (!doc) {
+      res.status(404).json({ error: 'Document not found' })
+      return
+    }
+
+    const [comment] = await query<DbDocumentComment>(
+      `INSERT INTO document_comments (document_id, author_id, body)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [docId, sub, body]
+    )
+
+    const full = await queryOne<DbDocumentCommentWithAuthor>(
+      `SELECT dc.*, u.name AS author_name, u.role AS author_role
+       FROM document_comments dc JOIN users u ON u.id = dc.author_id
+       WHERE dc.id = $1`,
+      [comment.id]
+    )
+
+    await audit(sub, 'document.commented', 'document', docId, { groupId })
+
+    // Notify the group's students when staff (supervisor/panel/admin) comment
+    // on their document — not on a fellow student's own comment.
+    if (role !== 'student') {
+      const memberIds = await query<{ user_id: string }>(
+        'SELECT user_id FROM group_members WHERE group_id = $1',
+        [groupId]
+      )
+      notifyMany(
+        memberIds.map((m) => m.user_id),
+        'document.commented',
+        'New comment on your document',
+        `${full!.author_name} commented on "${doc.file_name}".`,
+        '/student/documents'
+      )
+    }
+
+    res.status(201).json(formatComment(full!))
+  }
+)
 
 // ─── Static file serving ──────────────────────────────────────────────────────
 // Mount this on the Express app: app.use('/uploads', express.static('uploads'))

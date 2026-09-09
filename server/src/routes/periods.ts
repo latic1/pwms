@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { query, queryOne } from '../db'
 import { authenticate, requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
+import { notifyMany } from '../lib/notify'
 import { validate } from '../middleware/validate'
 import { createPeriodSchema } from '../lib/schemas'
 
@@ -182,6 +183,24 @@ router.patch('/:id/release-grades', adminOnly, async (req: Request, res: Respons
   )
 
   await audit(req.user!.sub, gradesReleased ? 'grades.released' : 'grades.hidden', 'period', id, {})
+
+  if (gradesReleased) {
+    const members = await query<{ user_id: string }>(
+      `SELECT DISTINCT gm.user_id
+       FROM groups g
+       JOIN group_members gm ON gm.group_id = g.id
+       WHERE g.period_id = $1`,
+      [id]
+    )
+    notifyMany(
+      members.map((m) => m.user_id),
+      'grades.released',
+      'Your final grade has been released',
+      'Your supervisor and panel feedback are now visible on your Grading page.',
+      '/student'
+    )
+  }
+
   res.json(formatPeriod(updated))
 })
 

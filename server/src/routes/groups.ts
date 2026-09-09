@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
 import { generateInviteCode } from '../lib/inviteCode'
 import { audit } from '../lib/auditLog'
+import { notifyMany } from '../lib/notify'
 import { validate } from '../middleware/validate'
 import { createGroupSchema, joinGroupSchema } from '../lib/schemas'
 
@@ -331,15 +332,17 @@ router.patch('/:id/supervisor', requireRole('admin'), async (req: Request, res: 
     return
   }
 
+  let supervisorName: string | null = null
   if (supervisorId) {
-    const supervisor = await queryOne(
-      "SELECT id FROM users WHERE id = $1 AND role = 'supervisor'",
+    const supervisor = await queryOne<{ id: string; name: string }>(
+      "SELECT id, name FROM users WHERE id = $1 AND role = 'supervisor'",
       [supervisorId]
     )
     if (!supervisor) {
       res.status(400).json({ error: 'User not found or is not a supervisor' })
       return
     }
+    supervisorName = supervisor.name
   }
 
   await query(
@@ -348,6 +351,20 @@ router.patch('/:id/supervisor', requireRole('admin'), async (req: Request, res: 
   )
 
   await audit(req.user!.sub, 'supervisor.assigned', 'group', id, { supervisorId })
+
+  if (supervisorId) {
+    const memberIds = await query<{ user_id: string }>(
+      'SELECT user_id FROM group_members WHERE group_id = $1',
+      [id]
+    )
+    notifyMany(
+      memberIds.map((m) => m.user_id),
+      'supervisor.assigned',
+      `You have been assigned to ${supervisorName}`,
+      null,
+      '/student/group'
+    )
+  }
 
   const full = await getGroupWithMembers(id)
   res.json(full)
@@ -434,6 +451,21 @@ router.post('/:id/approve-result', requireRole('supervisor', 'admin'), async (re
   )
 
   await audit(sub, 'result.approved', 'group', id, {})
+
+  // Signals the panel has finalized its decision — no score is revealed here,
+  // that still waits for the admin to release grades for the period.
+  const memberIds = await query<{ user_id: string }>(
+    'SELECT user_id FROM group_members WHERE group_id = $1',
+    [id]
+  )
+  notifyMany(
+    memberIds.map((m) => m.user_id),
+    'result.approved',
+    'Your project result has been approved',
+    'The examination panel has signed off your final result. Your grade will be visible once released.',
+    '/student'
+  )
+
   res.json({ id: updated.id, resultApproved: true, resultApprovedAt: updated.result_approved_at })
 })
 

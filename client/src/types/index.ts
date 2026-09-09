@@ -86,6 +86,16 @@ export interface Document {
   uploadedAt: string
 }
 
+export interface DocumentComment {
+  id: string
+  documentId: string
+  authorId: string
+  authorName: string
+  authorRole: Role
+  body: string
+  createdAt: string
+}
+
 export interface Message {
   id: string
   groupId: string

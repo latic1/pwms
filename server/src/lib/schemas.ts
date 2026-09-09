@@ -133,6 +133,12 @@ export const sendMessageSchema = z.object({
   body: z.string().min(1, 'Message cannot be empty').max(5000).trim(),
 })
 
+// ─── Document comments ────────────────────────────────────────────────────────
+
+export const addDocumentCommentSchema = z.object({
+  body: z.string().min(1, 'Comment cannot be empty').max(2000).trim(),
+})
+
 // ─── Periods ─────────────────────────────────────────────────────────────────
 
 export const createPeriodSchema = z.object({

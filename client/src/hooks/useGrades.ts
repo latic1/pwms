@@ -8,6 +8,10 @@ interface GradesResponse {
   grades: Grade[]
   average: number | null
   count: number
+  supervisorScore: number | null
+  panelAverage: number | null
+  panelCount: number
+  finalScore: number | null
 }
 
 export function useGrades(groupId: string | null) {
@@ -19,6 +23,10 @@ export function useGrades(groupId: string | null) {
     grades: data?.grades ?? [],
     average: data?.average ?? null,
     count: data?.count ?? 0,
+    supervisorScore: data?.supervisorScore ?? null,
+    panelAverage: data?.panelAverage ?? null,
+    panelCount: data?.panelCount ?? 0,
+    finalScore: data?.finalScore ?? null,
     error,
     isLoading,
     mutate,

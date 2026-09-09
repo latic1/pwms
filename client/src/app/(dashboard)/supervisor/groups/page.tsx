@@ -5,6 +5,7 @@ import { useGroups, useGroup } from '@/hooks/useGroup'
 import { useProposal } from '@/hooks/useProposal'
 import { useTasks } from '@/hooks/useTasks'
 import { useDocuments } from '@/hooks/useDocuments'
+import { DocumentCommentThread } from '@/components/documents/DocumentCommentThread'
 import api, { API_BASE } from '@/lib/api'
 import type { Proposal } from '@/types'
 
@@ -176,19 +177,22 @@ function GroupDetail({ groupId }: { groupId: string }) {
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Documents</h3>
           <div className="space-y-2">
             {documents.map((d) => (
-              <div key={d.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2 border">
-                <span className="text-gray-700 truncate">{d.fileName}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-gray-400">{new Date(d.uploadedAt).toLocaleDateString()}</span>
-                  <a
-                    href={`${API_BASE}${d.fileUrl}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Download
-                  </a>
+              <div key={d.id} className="bg-gray-50 rounded-lg px-3 py-2 border">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700 truncate">{d.fileName}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-gray-400">{new Date(d.uploadedAt).toLocaleDateString()}</span>
+                    <a
+                      href={`${API_BASE}${d.fileUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Download
+                    </a>
+                  </div>
                 </div>
+                <DocumentCommentThread groupId={groupId} docId={d.id} />
               </div>
             ))}
           </div>

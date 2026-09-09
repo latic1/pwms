@@ -96,7 +96,7 @@ export function NotificationBell() {
                     {!n.read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                        {n.title}
+                        🔔 {n.title}
                       </p>
                       {n.body && (
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>

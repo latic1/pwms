@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useMyGroup } from '@/hooks/useGroup'
 import { useDocuments } from '@/hooks/useDocuments'
+import { DocumentCommentThread } from '@/components/documents/DocumentCommentThread'
 import api, { API_BASE } from '@/lib/api'
 import type { Document } from '@/types'
 
@@ -95,7 +96,7 @@ export default function DocumentsPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="text-sm text-gray-500 mt-1">Upload and manage your group's project files</p>
+          <p className="text-sm text-gray-500 mt-1">Upload and manage your group&apos;s project files</p>
         </div>
         <button
           onClick={() => { setUploading(!uploading); setUploadError('') }}
@@ -185,26 +186,29 @@ export default function DocumentsPage() {
           filtered.map((doc) => {
             const uploader = group.members.find((m) => m.id === doc.uploaderId)
             return (
-              <div key={doc.id} className="bg-white rounded-xl border shadow-sm p-4 flex items-center gap-4">
-                <FileIcon type={doc.type} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{doc.fileName}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
-                    <span>Uploaded by {uploader?.name ?? 'Unknown'}</span>
-                    <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
+              <div key={doc.id} className="bg-white rounded-xl border shadow-sm p-4">
+                <div className="flex items-center gap-4">
+                  <FileIcon type={doc.type} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{doc.fileName}</p>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
+                      <span>Uploaded by {uploader?.name ?? 'Unknown'}</span>
+                      <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
+                  <span className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${typeStyles[doc.type]}`}>
+                    {typeLabels[doc.type]}
+                  </span>
+                  <a
+                    href={`${API_BASE}${doc.fileUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    Download
+                  </a>
                 </div>
-                <span className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${typeStyles[doc.type]}`}>
-                  {typeLabels[doc.type]}
-                </span>
-                <a
-                  href={`${API_BASE}${doc.fileUrl}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  Download
-                </a>
+                <DocumentCommentThread groupId={group.id} docId={doc.id} />
               </div>
             )
           })

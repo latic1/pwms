@@ -5,6 +5,7 @@ import { useMyGroup } from '@/hooks/useGroup'
 import { useProposal } from '@/hooks/useProposal'
 import { useTasks } from '@/hooks/useTasks'
 import { useMeetings } from '@/hooks/useMeetings'
+import { useGrades } from '@/hooks/useGrades'
 import { useActivePeriod } from '@/hooks/usePeriods'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import api from '@/lib/api'
@@ -33,6 +34,9 @@ export default function StudentDashboard() {
   const { tasks } = useTasks(group?.id ?? null)
   const { meetings, mutate: mutateMeetings } = useMeetings(group?.id ?? null)
   const { period } = useActivePeriod()
+  const { grades, finalScore, supervisorScore, panelAverage, panelCount } = useGrades(
+    period?.gradesReleased ? group?.id ?? null : null
+  )
 
   const doneTasks    = tasks.filter((t) => t.status === 'done').length
   const pendingTasks = tasks.filter((t) => t.status !== 'done').length
@@ -168,6 +172,30 @@ export default function StudentDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {period?.gradesReleased && finalScore != null && (
+            <div className="bg-white rounded-xl border p-5 shadow-sm">
+              <h2 className="font-semibold text-gray-800 mb-3">Your Grade</h2>
+              <div className="flex flex-wrap items-center gap-4 mb-3">
+                <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-4 py-2">
+                  <p className="text-xs text-gray-500">Final Score</p>
+                  <p className="text-2xl font-bold text-indigo-700">{finalScore}/100</p>
+                </div>
+                {supervisorScore != null && (
+                  <p className="text-sm text-gray-500">Supervisor: <span className="font-medium text-gray-700">{supervisorScore}/100</span></p>
+                )}
+                {panelCount > 0 && panelAverage != null && (
+                  <p className="text-sm text-gray-500">Panel average: <span className="font-medium text-gray-700">{panelAverage}/100</span></p>
+                )}
+              </div>
+              {grades.filter((g) => g.feedback).map((g) => (
+                <p key={g.id} className="text-sm text-gray-600 italic border-t pt-3 mt-1 first:border-t-0 first:pt-0 first:mt-0">
+                  <span className="not-italic font-medium text-gray-700 capitalize">{g.graderRole}: </span>
+                  &ldquo;{g.feedback}&rdquo;
+                </p>
+              ))}
             </div>
           )}
         </>

@@ -3,6 +3,7 @@ import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { validate } from '../middleware/validate'
 import { sendMessageSchema } from '../lib/schemas'
+import { notifyMany } from '../lib/notify'
 
 const router = Router()
 router.use(authenticate)
@@ -127,6 +128,22 @@ router.post('/:groupId', validate(sendMessageSchema), async (req: Request, res: 
      WHERE m.id = $1`,
     [message.id]
   )
+
+  // Notify the group's students when their supervisor writes in — not on a
+  // fellow student's own message.
+  if (role === 'supervisor') {
+    const memberIds = await query<{ user_id: string }>(
+      'SELECT user_id FROM group_members WHERE group_id = $1',
+      [groupId]
+    )
+    notifyMany(
+      memberIds.map((m) => m.user_id),
+      'message.supervisor',
+      'New message from your supervisor',
+      body.trim().length > 140 ? `${body.trim().slice(0, 140)}…` : body.trim(),
+      '/student/messages'
+    )
+  }
 
   res.status(201).json(formatMessage(full!))
 })
