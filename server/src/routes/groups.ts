@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
 import { generateInviteCode } from '../lib/inviteCode'
 import { audit } from '../lib/auditLog'
-import { notifyMany } from '../lib/notify'
+import { notify, notifyMany } from '../lib/notify'
 import { validate } from '../middleware/validate'
 import { createGroupSchema, joinGroupSchema } from '../lib/schemas'
 
@@ -363,6 +363,13 @@ router.patch('/:id/supervisor', requireRole('admin'), async (req: Request, res: 
       `You have been assigned to ${supervisorName}`,
       null,
       '/student/group'
+    )
+    notify(
+      supervisorId,
+      'group.assigned',
+      'New group assigned to you',
+      `Group "${group.name}" has been assigned to you.`,
+      '/supervisor/groups'
     )
   }
 

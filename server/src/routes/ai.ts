@@ -7,6 +7,7 @@ import { suggestTopicsSchema, matchSupervisorsSchema } from '../lib/schemas'
 import { suggestTopics, explainSupervisorMatches } from '../lib/gemini'
 import { rankSupervisors, SupervisorCandidate } from '../lib/supervisorMatch'
 import { audit } from '../lib/auditLog'
+import { notifyMany, getAdminIds } from '../lib/notify'
 
 const router = Router()
 router.use(authenticate)
@@ -110,8 +111,8 @@ router.post(
     const userId = req.user!.sub
     const { topicTitle, keywords } = req.body
 
-    const student = await queryOne<{ department: string | null }>(
-      'SELECT department FROM users WHERE id = $1',
+    const student = await queryOne<{ name: string; department: string | null }>(
+      'SELECT name, department FROM users WHERE id = $1',
       [userId]
     )
 
@@ -164,6 +165,15 @@ router.post(
       keywords,
       aiExplained: explanations.length > 0,
     })
+
+    const adminIds = await getAdminIds()
+    notifyMany(
+      adminIds,
+      'ai.matching_completed',
+      'AI supervisor matching completed',
+      `${student?.name ?? 'A student'} requested matches for "${topicTitle}" — ${finalMatches.length} supervisor${finalMatches.length !== 1 ? 's' : ''} suggested.`,
+      '/admin/groups'
+    )
 
     res.json(finalMatches)
   }

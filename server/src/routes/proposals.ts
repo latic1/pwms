@@ -6,7 +6,7 @@ import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
-import { notifyMany } from '../lib/notify'
+import { notifyMany, getAdminIds } from '../lib/notify'
 import { smsProposalDecision } from '../lib/sms'
 import { emailProposalDecision } from '../lib/email'
 import { validate } from '../middleware/validate'
@@ -58,6 +58,7 @@ interface DbProposal {
 
 interface DbGroup {
   id: string
+  name: string
   leader_id: string
   supervisor_id: string | null
   panel_id: string | null
@@ -68,7 +69,7 @@ interface DbGroup {
 
 async function assertLeader(groupId: string, userId: string): Promise<DbGroup | null> {
   const group = await queryOne<DbGroup>(
-    'SELECT id, leader_id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
+    'SELECT id, name, leader_id, supervisor_id, panel_id, period_id FROM groups WHERE id = $1',
     [groupId]
   )
   if (!group) return null
@@ -156,6 +157,15 @@ router.post('/:groupId', requireRole('student'), upload.single('file'), async (r
   await audit(userId, 'proposal.submitted', 'proposal', proposal.id, {
     groupId, version: newVersion,
   })
+
+  const adminIds = await getAdminIds()
+  notifyMany(
+    adminIds,
+    'proposal.submitted',
+    'New project topic submitted',
+    `Group "${group.name}" submitted "${proposal.title}" for review.`,
+    '/admin/groups'
+  )
 
   res.status(201).json(formatProposal(proposal))
 })

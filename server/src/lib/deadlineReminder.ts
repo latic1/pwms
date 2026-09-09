@@ -1,7 +1,7 @@
 import { query } from '../db'
 import { smsDeadlineReminder } from './sms'
 import { emailDeadlineReminder } from './email'
-import { notifyMany } from './notify'
+import { notify, notifyMany, getAdminIds } from './notify'
 
 interface ReminderMember {
   id:    string
@@ -42,6 +42,10 @@ function daysFromNow(n: number): string {
   return d.toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 async function runCheck() {
   const sevenDays  = daysFromNow(7)
   const threeDays  = daysFromNow(3)
@@ -68,12 +72,39 @@ async function runCheck() {
       await notifyMembers(
         members,
         'document submission',
-        new Date(period.submission_deadline).toLocaleDateString('en-GB', {
-          day: 'numeric', month: 'long', year: 'numeric',
-        })
+        formatDate(period.submission_deadline)
       )
       console.log(`[Reminder] Submission deadline reminder sent for period "${period.name}" to ${members.length} students`)
     }
+
+    // Supervisors who haven't graded a group in this period yet — same
+    // 7-day heads-up window students get for submitting.
+    const ungraded = await query<{ supervisor_id: string; group_name: string }>(
+      `SELECT g.supervisor_id, g.name AS group_name
+       FROM groups g
+       WHERE g.period_id = $1
+         AND g.supervisor_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM grades gr WHERE gr.group_id = g.id AND gr.grader_role = 'supervisor')`,
+      [period.id]
+    )
+    for (const row of ungraded) {
+      await notify(
+        row.supervisor_id,
+        'grading.deadline_approaching',
+        'Grading deadline approaching',
+        `"${row.group_name}" still needs a grade before ${formatDate(period.submission_deadline)}.`,
+        '/supervisor/grading'
+      )
+    }
+
+    // Admin heads-up on the same deadline
+    await notifyMany(
+      await getAdminIds(),
+      'deadline.reminder',
+      `Submission deadline approaching: ${period.name}`,
+      `Final submission is due ${formatDate(period.submission_deadline)}.`,
+      '/admin/periods'
+    )
   }
 
   // Periods whose proposal deadline is exactly 3 days away
@@ -102,12 +133,71 @@ async function runCheck() {
       await notifyMembers(
         members,
         'proposal submission',
-        new Date(period.proposal_deadline).toLocaleDateString('en-GB', {
-          day: 'numeric', month: 'long', year: 'numeric',
-        })
+        formatDate(period.proposal_deadline)
       )
       console.log(`[Reminder] Proposal deadline reminder sent for period "${period.name}" to ${members.length} students`)
     }
+
+    await notifyMany(
+      await getAdminIds(),
+      'deadline.reminder',
+      `Proposal deadline approaching: ${period.name}`,
+      `Proposal submission is due ${formatDate(period.proposal_deadline)}.`,
+      '/admin/periods'
+    )
+  }
+
+  // Periods whose group-formation deadline is exactly 3 days away (admin only)
+  const groupPeriods = await query<{ id: string; name: string; group_deadline: string }>(
+    `SELECT id, name, group_deadline FROM academic_periods WHERE group_deadline::date = $1::date`,
+    [threeDays]
+  )
+  for (const period of groupPeriods) {
+    await notifyMany(
+      await getAdminIds(),
+      'deadline.reminder',
+      `Group formation deadline approaching: ${period.name}`,
+      `Group formation closes ${formatDate(period.group_deadline)}.`,
+      '/admin/periods'
+    )
+  }
+
+  await runAdminDigest()
+}
+
+/** Daily backlog summary for admins — pending proposals and groups without a supervisor. */
+async function runAdminDigest() {
+  const adminIds = await getAdminIds()
+  if (adminIds.length === 0) return
+
+  const [pendingProposals] = await query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM proposals p
+     WHERE p.status = 'pending'
+       AND p.version = (SELECT MAX(version) FROM proposals WHERE group_id = p.group_id)`
+  )
+  const pendingCount = parseInt(pendingProposals?.count ?? '0')
+  if (pendingCount > 0) {
+    await notifyMany(
+      adminIds,
+      'digest.proposals_pending',
+      `${pendingCount} project topic${pendingCount !== 1 ? 's are' : ' is'} awaiting review`,
+      null,
+      '/admin/groups'
+    )
+  }
+
+  const [unassigned] = await query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM groups WHERE supervisor_id IS NULL`
+  )
+  const unassignedCount = parseInt(unassigned?.count ?? '0')
+  if (unassignedCount > 0) {
+    await notifyMany(
+      adminIds,
+      'digest.supervisor_unassigned',
+      `${unassignedCount} group${unassignedCount !== 1 ? 's' : ''} waiting for a supervisor assignment`,
+      null,
+      '/admin/groups'
+    )
   }
 }
 

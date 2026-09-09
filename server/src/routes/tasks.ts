@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { query, queryOne } from '../db'
 import { authenticate, requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
+import { notify } from '../lib/notify'
 import { validate } from '../middleware/validate'
 import { createTaskSchema, updateTaskStatusSchema } from '../lib/schemas'
 
@@ -229,6 +230,22 @@ router.patch('/:groupId/:taskId', validate(updateTaskStatusSchema), async (req: 
     await audit(sub, 'task.status_changed', 'task', taskId, {
       groupId, from: task.status, to: status,
     })
+
+    if (role === 'student') {
+      const group = await queryOne<{ name: string; supervisor_id: string | null }>(
+        'SELECT name, supervisor_id FROM groups WHERE id = $1',
+        [groupId]
+      )
+      if (group?.supervisor_id) {
+        notify(
+          group.supervisor_id,
+          'task.status_changed',
+          `${group.name} updated a task`,
+          `"${updated.title}" moved to ${status.replace('_', ' ')}.`,
+          '/supervisor/groups'
+        )
+      }
+    }
   }
 
   res.json(formatTask(updated))

@@ -32,3 +32,9 @@ export async function notifyMany(
 ): Promise<void> {
   await Promise.all(userIds.map((id) => notify(id, type, title, body, link)))
 }
+
+/** IDs of every admin — used for system-wide notifications (new proposal, AI matching, digests). */
+export async function getAdminIds(): Promise<string[]> {
+  const rows = await query<{ id: string }>("SELECT id FROM users WHERE role = 'admin' AND is_active = TRUE")
+  return rows.map((r) => r.id)
+}

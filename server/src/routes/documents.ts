@@ -5,7 +5,7 @@ import fs from 'fs'
 import { query, queryOne } from '../db'
 import { authenticate } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
-import { notifyMany } from '../lib/notify'
+import { notify, notifyMany } from '../lib/notify'
 import { validate } from '../middleware/validate'
 import { addDocumentCommentSchema } from '../lib/schemas'
 
@@ -180,6 +180,23 @@ router.post('/:groupId', upload.single('file'), async (req: Request, res: Respon
   await audit(sub, 'document.uploaded', 'document', doc.id, {
     groupId, fileName: req.file.originalname, type: docType,
   })
+
+  // Let the supervisor know a group they supervise submitted something
+  if (role === 'student') {
+    const group = await queryOne<{ name: string; supervisor_id: string | null }>(
+      'SELECT name, supervisor_id FROM groups WHERE id = $1',
+      [groupId]
+    )
+    if (group?.supervisor_id) {
+      notify(
+        group.supervisor_id,
+        'document.uploaded',
+        `${group.name} has submitted ${req.file.originalname} for review`,
+        null,
+        '/supervisor/groups'
+      )
+    }
+  }
 
   res.status(201).json(formatDoc(doc))
 })
