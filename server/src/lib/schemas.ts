@@ -80,7 +80,7 @@ export const joinGroupSchema = z.object({
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
-const TASK_STATUSES = ['pending', 'in_progress', 'under_review', 'done'] as const
+const TASK_STATUSES = ['pending', 'in_progress', 'under_review', 'changes_requested', 'done'] as const
 
 export const createTaskSchema = z.object({
   title:      z.string().min(1, 'Title is required').max(200).trim(),
@@ -89,8 +89,19 @@ export const createTaskSchema = z.object({
   dueDate:    z.string().datetime({ offset: true }).optional().or(z.string().date().optional()),
 })
 
-export const updateTaskStatusSchema = z.object({
-  status: z.enum(TASK_STATUSES, { error: 'Invalid task status' }),
+// Previously named updateTaskStatusSchema and declared only `status` (required)
+// — every other field a PATCH sent (title, description, assigneeId, dueDate)
+// was silently stripped before the route ever saw it, and status being
+// required meant you couldn't PATCH just the other fields at all.
+export const updateTaskSchema = z.object({
+  title:       z.string().min(1).max(200).trim().optional(),
+  description: z.string().max(1000).trim().optional(),
+  assigneeId:  z.string().uuid('Invalid assignee ID').optional(),
+  dueDate:     z.string().datetime({ offset: true }).optional().or(z.string().date().optional()),
+  status:      z.enum(TASK_STATUSES, { error: 'Invalid task status' }).optional(),
+  // Required (checked in the route, not here) when a supervisor/admin sets
+  // status to 'changes_requested' — the reason the student needs to fix.
+  supervisorComment: z.string().max(2000).trim().optional(),
 })
 
 // ─── Proposals ────────────────────────────────────────────────────────────────

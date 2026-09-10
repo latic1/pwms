@@ -4,7 +4,7 @@ import { authenticate, requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
 import { notify } from '../lib/notify'
 import { validate } from '../middleware/validate'
-import { createTaskSchema, updateTaskStatusSchema } from '../lib/schemas'
+import { createTaskSchema, updateTaskSchema } from '../lib/schemas'
 
 const router = Router()
 router.use(authenticate)
@@ -19,15 +19,24 @@ interface DbTask {
   title: string
   description: string | null
   assignee_id: string | null
-  status: 'pending' | 'in_progress' | 'under_review' | 'done'
+  status: 'pending' | 'in_progress' | 'under_review' | 'changes_requested' | 'done'
   due_date: string | null
   created_by: string
+  supervisor_comment: string | null
   created_at: string
   updated_at: string
 }
 
-const VALID_STATUSES = ['pending', 'in_progress', 'under_review', 'done']
-const STATUS_ORDER   = ['pending', 'in_progress', 'under_review', 'done']
+const VALID_STATUSES = ['pending', 'in_progress', 'under_review', 'changes_requested', 'done']
+
+// What a student (assignee/leader) may move a task to, keyed by its current
+// status — 'under_review' and 'done' aren't in here because those are only
+// ever set by a supervisor deciding on a submission, not chosen by a student.
+const STUDENT_ALLOWED_NEXT: Record<string, string[]> = {
+  pending:           ['in_progress'],
+  in_progress:       ['under_review'],
+  changes_requested: ['under_review'], // resubmit after addressing feedback
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,16 +58,17 @@ async function assertGroupAccess(groupId: string, userId: string, role: string) 
 
 function formatTask(t: DbTask) {
   return {
-    id:          t.id,
-    groupId:     t.group_id,
-    title:       t.title,
-    description: t.description,
-    assigneeId:  t.assignee_id,
-    status:      t.status,
-    dueDate:     t.due_date,
-    createdBy:   t.created_by,
-    createdAt:   t.created_at,
-    updatedAt:   t.updated_at,
+    id:                t.id,
+    groupId:           t.group_id,
+    title:             t.title,
+    description:       t.description,
+    assigneeId:        t.assignee_id,
+    status:            t.status,
+    dueDate:           t.due_date,
+    createdBy:         t.created_by,
+    supervisorComment: t.supervisor_comment,
+    createdAt:         t.created_at,
+    updatedAt:         t.updated_at,
   }
 }
 
@@ -147,16 +157,27 @@ router.post('/:groupId', validate(createTaskSchema), async (req: Request, res: R
   )
 
   await audit(sub, 'task.created', 'task', task.id, { groupId, title: task.title })
+
+  if (task.assignee_id) {
+    notify(
+      task.assignee_id,
+      'task.assigned',
+      'New task assigned to you',
+      task.due_date ? `"${task.title}" — due ${new Date(task.due_date).toLocaleDateString()}.` : `"${task.title}"`,
+      '/student/tasks'
+    )
+  }
+
   res.status(201).json(formatTask(task))
 })
 
 // ─── PATCH /tasks/:groupId/:taskId — update task (assignee updates status; leader/supervisor edits all) ──
 
-router.patch('/:groupId/:taskId', validate(updateTaskStatusSchema), async (req: Request, res: Response): Promise<void> => {
+router.patch('/:groupId/:taskId', validate(updateTaskSchema), async (req: Request, res: Response): Promise<void> => {
   const groupId = p(req.params.groupId)
   const taskId  = p(req.params.taskId)
   const { sub, role } = req.user!
-  const { title, description, assigneeId, dueDate, status } = req.body
+  const { title, description, assigneeId, dueDate, status, supervisorComment } = req.body
 
   const task = await queryOne<DbTask>(
     'SELECT * FROM tasks WHERE id = $1 AND group_id = $2',
@@ -196,25 +217,34 @@ router.patch('/:groupId/:taskId', validate(updateTaskStatusSchema), async (req: 
     return
   }
 
-  // Validate forward-only status progression for non-admin/non-supervisor
+  // A student can only move a task the way STUDENT_ALLOWED_NEXT permits from
+  // its current status — they can submit work for review or resubmit after
+  // changes are requested, but only a supervisor can accept (done) or
+  // decline (changes_requested) a submission.
   if (status && role === 'student') {
-    const currentIdx = STATUS_ORDER.indexOf(task.status)
-    const newIdx     = STATUS_ORDER.indexOf(status)
-    if (newIdx < currentIdx) {
-      res.status(400).json({ error: 'Task status can only move forward' })
+    const allowed = STUDENT_ALLOWED_NEXT[task.status] ?? []
+    if (!allowed.includes(status)) {
+      res.status(400).json({ error: `A student cannot move a task from "${task.status}" to "${status}"` })
       return
     }
   }
 
+  // Declining a submission must always come with a reason
+  if (status === 'changes_requested' && (role === 'supervisor' || role === 'admin') && !supervisorComment?.trim()) {
+    res.status(400).json({ error: 'A comment is required when requesting changes' })
+    return
+  }
+
   const [updated] = await query<DbTask>(
     `UPDATE tasks
-     SET title       = COALESCE($1, title),
-         description = COALESCE($2, description),
-         assignee_id = COALESCE($3, assignee_id),
-         due_date    = COALESCE($4, due_date),
-         status      = COALESCE($5, status),
-         updated_at  = NOW()
-     WHERE id = $6
+     SET title              = COALESCE($1, title),
+         description        = COALESCE($2, description),
+         assignee_id        = COALESCE($3, assignee_id),
+         due_date           = COALESCE($4, due_date),
+         status             = COALESCE($5, status),
+         supervisor_comment = COALESCE($6, supervisor_comment),
+         updated_at         = NOW()
+     WHERE id = $7
      RETURNING *`,
     [
       title?.trim()    ?? null,
@@ -222,6 +252,7 @@ router.patch('/:groupId/:taskId', validate(updateTaskStatusSchema), async (req: 
       assigneeId       ?? null,
       dueDate          ?? null,
       status           ?? null,
+      supervisorComment?.trim() ?? null,
       taskId,
     ]
   )
@@ -243,6 +274,24 @@ router.patch('/:groupId/:taskId', validate(updateTaskStatusSchema), async (req: 
           `${group.name} updated a task`,
           `"${updated.title}" moved to ${status.replace('_', ' ')}.`,
           '/supervisor/groups'
+        )
+      }
+    } else if ((role === 'supervisor' || role === 'admin') && updated.assignee_id) {
+      if (status === 'done') {
+        notify(
+          updated.assignee_id,
+          'task.accepted',
+          'Task accepted',
+          `"${updated.title}" was marked done.`,
+          '/student/tasks'
+        )
+      } else if (status === 'changes_requested') {
+        notify(
+          updated.assignee_id,
+          'task.changes_requested',
+          'Changes requested on your task',
+          `"${updated.title}": ${updated.supervisor_comment}`,
+          '/student/tasks'
         )
       }
     }

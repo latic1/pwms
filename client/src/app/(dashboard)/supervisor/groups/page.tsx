@@ -7,7 +7,7 @@ import { useTasks } from '@/hooks/useTasks'
 import { useDocuments } from '@/hooks/useDocuments'
 import { DocumentCommentThread } from '@/components/documents/DocumentCommentThread'
 import api, { API_BASE } from '@/lib/api'
-import type { Proposal } from '@/types'
+import type { Proposal, Task, GroupMember } from '@/types'
 
 const proposalStatusStyles: Record<Proposal['status'], string> = {
   pending:           'bg-yellow-100 text-yellow-700',
@@ -17,16 +17,212 @@ const proposalStatusStyles: Record<Proposal['status'], string> = {
 }
 
 const taskStatusStyles: Record<string, string> = {
-  pending:      'bg-gray-100 text-gray-600',
-  in_progress:  'bg-blue-100 text-blue-700',
-  under_review: 'bg-yellow-100 text-yellow-700',
-  done:         'bg-green-100 text-green-700',
+  pending:           'bg-gray-100 text-gray-600',
+  in_progress:       'bg-blue-100 text-blue-700',
+  under_review:      'bg-yellow-100 text-yellow-700',
+  changes_requested: 'bg-amber-100 text-amber-700',
+  done:              'bg-green-100 text-green-700',
+}
+
+// ─── Task review (accept / decline a submission) ───────────────────────────────
+
+function TaskItem({ groupId, task, members, onChanged }: {
+  groupId: string
+  task: Task
+  members: GroupMember[]
+  onChanged: () => void
+}) {
+  const [declining, setDeclining] = useState(false)
+  const [comment,   setComment]   = useState('')
+  const [busy,      setBusy]      = useState(false)
+  const [error,     setError]     = useState('')
+
+  const assignee = members.find((m) => m.id === task.assigneeId)
+
+  async function decide(status: 'done' | 'changes_requested') {
+    if (status === 'changes_requested' && !comment.trim()) {
+      setError('A comment is required when declining.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await api.patch(`/tasks/${groupId}/${task.id}`, {
+        status,
+        ...(status === 'changes_requested' && { supervisorComment: comment.trim() }),
+      })
+      setComment('')
+      setDeclining(false)
+      onChanged()
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Failed to update task.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-lg border px-3 py-2">
+      <div className="flex items-center justify-between text-sm gap-3">
+        <div className="min-w-0">
+          <p className="text-gray-700 truncate">{task.title}</p>
+          {task.dueDate && (
+            <p className="text-xs text-gray-400">Due {new Date(task.dueDate).toLocaleDateString()}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {assignee && <span className="text-xs text-gray-400">{assignee.name.split(' ')[0]}</span>}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${taskStatusStyles[task.status]}`}>
+            {task.status.replace('_', ' ')}
+          </span>
+        </div>
+      </div>
+
+      {task.status === 'changes_requested' && task.supervisorComment && (
+        <p className="text-xs text-amber-700 mt-1.5 italic">Feedback given: &ldquo;{task.supervisorComment}&rdquo;</p>
+      )}
+
+      {task.status === 'under_review' && (
+        <div className="mt-2 pt-2 border-t border-gray-200">
+          {declining ? (
+            <div className="space-y-2">
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={2}
+                placeholder="Reason for declining — what should they fix? (required)"
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+              />
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => decide('changes_requested')}
+                  disabled={busy}
+                  className="text-xs px-2.5 py-1 rounded-md bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {busy ? '...' : 'Confirm decline'}
+                </button>
+                <button
+                  onClick={() => { setDeclining(false); setError('') }}
+                  className="text-xs px-2.5 py-1 rounded-md border text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => decide('done')}
+                disabled={busy}
+                className="text-xs px-2.5 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => setDeclining(true)}
+                className="text-xs px-2.5 py-1 rounded-md border border-amber-300 text-amber-700 hover:bg-amber-50"
+              >
+                Decline
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Create a task ──────────────────────────────────────────────────────────────
+
+function NewTaskForm({ groupId, members, onCreated, onCancel }: {
+  groupId: string
+  members: GroupMember[]
+  onCreated: () => void
+  onCancel: () => void
+}) {
+  const [title,       setTitle]       = useState('')
+  const [description, setDescription] = useState('')
+  const [assigneeId,  setAssigneeId]  = useState('')
+  const [dueDate,     setDueDate]     = useState('')
+  const [busy,        setBusy]        = useState(false)
+  const [error,       setError]       = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!title.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.post(`/tasks/${groupId}`, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        assigneeId: assigneeId || undefined,
+        dueDate: dueDate || undefined,
+      })
+      onCreated()
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Failed to create task.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-gray-50 rounded-lg border p-3 space-y-2 mb-3">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        required
+        autoFocus
+        placeholder="e.g. Submit Chapter One"
+        className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-gray-900"
+      />
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        placeholder="Details (optional)"
+        className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <select
+          value={assigneeId}
+          onChange={(e) => setAssigneeId(e.target.value)}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
+        >
+          <option value="">Unassigned</option>
+          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-gray-900"
+        />
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancel} className="text-xs px-2.5 py-1 text-gray-600 hover:text-gray-900">
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={busy || !title.trim()}
+          className="text-xs px-3 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50"
+        >
+          {busy ? 'Adding...' : 'Add task'}
+        </button>
+      </div>
+    </form>
+  )
 }
 
 function GroupDetail({ groupId }: { groupId: string }) {
   const { group }     = useGroup(groupId)
   const { proposal, mutate: mutateProposal } = useProposal(groupId)
-  const { tasks }     = useTasks(groupId)
+  const { tasks, mutate: mutateTasks } = useTasks(groupId)
+  const [showTaskForm, setShowTaskForm] = useState(false)
   const { documents } = useDocuments(groupId)
 
   const [reviewComment, setReviewComment] = useState('')
@@ -149,27 +345,42 @@ function GroupDetail({ groupId }: { groupId: string }) {
       )}
 
       {/* Tasks */}
-      {tasks.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Tasks</h3>
-          <div className="space-y-2">
-            {tasks.map((t) => {
-              const assignee = group.members.find((m) => m.id === t.assigneeId)
-              return (
-                <div key={t.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2 border">
-                  <span className="text-gray-700 truncate mr-3">{t.title}</span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {assignee && <span className="text-xs text-gray-400">{assignee.name.split(' ')[0]}</span>}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${taskStatusStyles[t.status]}`}>
-                      {t.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700">Tasks</h3>
+          {!showTaskForm && (
+            <button
+              onClick={() => setShowTaskForm(true)}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              + Add task
+            </button>
+          )}
         </div>
-      )}
+        {showTaskForm && (
+          <NewTaskForm
+            groupId={groupId}
+            members={group.members}
+            onCreated={() => { mutateTasks(); setShowTaskForm(false) }}
+            onCancel={() => setShowTaskForm(false)}
+          />
+        )}
+        {tasks.length === 0 ? (
+          <p className="text-xs text-gray-400">No tasks yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {tasks.map((t) => (
+              <TaskItem
+                key={t.id}
+                groupId={groupId}
+                task={t}
+                members={group.members}
+                onChanged={() => mutateTasks()}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Documents */}
       {documents.length > 0 && (

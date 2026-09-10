@@ -73,8 +73,9 @@ export interface Task {
   title: string
   description: string
   assigneeId: string
-  status: 'pending' | 'in_progress' | 'under_review' | 'done'
+  status: 'pending' | 'in_progress' | 'under_review' | 'changes_requested' | 'done'
   dueDate: string
+  supervisorComment?: string | null
   createdBy: string
 }
 

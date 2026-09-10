@@ -7,27 +7,31 @@ import { useState } from 'react'
 import api from '@/lib/api'
 import type { Task } from '@/types'
 
-const statusOrder: Task['status'][] = ['pending', 'in_progress', 'under_review', 'done']
+const statusOrder: Task['status'][] = ['pending', 'in_progress', 'under_review', 'changes_requested', 'done']
 
 const statusStyles: Record<Task['status'], string> = {
-  pending:      'bg-gray-100 text-gray-600',
-  in_progress:  'bg-blue-100 text-blue-700',
-  under_review: 'bg-yellow-100 text-yellow-700',
-  done:         'bg-green-100 text-green-700',
+  pending:            'bg-gray-100 text-gray-600',
+  in_progress:        'bg-blue-100 text-blue-700',
+  under_review:       'bg-yellow-100 text-yellow-700',
+  changes_requested:  'bg-amber-100 text-amber-700',
+  done:               'bg-green-100 text-green-700',
 }
 
 const statusLabels: Record<Task['status'], string> = {
-  pending:      'Pending',
-  in_progress:  'In Progress',
-  under_review: 'Under Review',
-  done:         'Done',
+  pending:            'Pending',
+  in_progress:        'In Progress',
+  under_review:       'Under Review',
+  changes_requested:  'Changes Requested',
+  done:               'Done',
 }
 
-const nextStatus: Record<Task['status'], Task['status'] | null> = {
-  pending:      'in_progress',
-  in_progress:  'under_review',
-  under_review: 'done',
-  done:         null,
+// What a student can move a task to themselves, and the button label for
+// doing so. 'under_review' and 'done' aren't here — only a supervisor
+// decides those (accept/decline a submission).
+const nextStatus: Partial<Record<Task['status'], { to: Task['status']; label: string }>> = {
+  pending:           { to: 'in_progress',  label: 'Start' },
+  in_progress:       { to: 'under_review', label: 'Submit for Review' },
+  changes_requested: { to: 'under_review', label: 'Resubmit' },
 }
 
 export default function TasksPage() {
@@ -43,7 +47,8 @@ export default function TasksPage() {
     if (!next) return
     setAdvancing(task.id)
     try {
-      await api.patch(`/tasks/${task.id}`, { status: next })
+      // Route is PATCH /tasks/:groupId/:taskId — both segments required.
+      await api.patch(`/tasks/${task.groupId}/${task.id}`, { status: next.to })
       mutate()
     } catch (err: any) {
       alert(err?.response?.data?.error ?? 'Failed to update task.')
@@ -55,18 +60,19 @@ export default function TasksPage() {
   const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
 
   const counts = {
-    all:          tasks.length,
-    pending:      tasks.filter((t) => t.status === 'pending').length,
-    in_progress:  tasks.filter((t) => t.status === 'in_progress').length,
-    under_review: tasks.filter((t) => t.status === 'under_review').length,
-    done:         tasks.filter((t) => t.status === 'done').length,
+    all:               tasks.length,
+    pending:           tasks.filter((t) => t.status === 'pending').length,
+    in_progress:       tasks.filter((t) => t.status === 'in_progress').length,
+    under_review:      tasks.filter((t) => t.status === 'under_review').length,
+    changes_requested: tasks.filter((t) => t.status === 'changes_requested').length,
+    done:              tasks.filter((t) => t.status === 'done').length,
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-        <p className="text-sm text-gray-500 mt-1">Track and update your group's project tasks</p>
+        <p className="text-sm text-gray-500 mt-1">Track and update your group&apos;s project tasks</p>
       </div>
 
       {!group ? (
@@ -114,7 +120,8 @@ export default function TasksPage() {
             ) : (
               filtered.map((task) => {
                 const isAssignee = task.assigneeId === user?.id
-                const canAdvance = isAssignee && task.status !== 'done'
+                const next       = nextStatus[task.status]
+                const canAdvance = isAssignee && !!next
                 const overdue    = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
 
                 return (
@@ -150,6 +157,13 @@ export default function TasksPage() {
                         <p className="text-xs text-gray-500 mt-1">{task.description}</p>
                       )}
 
+                      {task.status === 'changes_requested' && task.supervisorComment && (
+                        <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                          <p className="text-xs font-semibold text-amber-700 mb-0.5">Supervisor feedback</p>
+                          <p className="text-xs text-amber-800">{task.supervisorComment}</p>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-4 mt-3 text-xs text-gray-400 flex-wrap">
                         {task.assigneeId && (
                           <span>
@@ -175,7 +189,7 @@ export default function TasksPage() {
                         disabled={advancing === task.id}
                         className="shrink-0 text-xs px-3 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50"
                       >
-                        {advancing === task.id ? '...' : `Mark as ${statusLabels[nextStatus[task.status]!]}`}
+                        {advancing === task.id ? '...' : next!.label}
                       </button>
                     )}
                   </div>

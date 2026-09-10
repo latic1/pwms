@@ -129,6 +129,8 @@ export default function StudentDashboard() {
                             ? 'bg-blue-100 text-blue-700'
                             : task.status === 'under_review'
                             ? 'bg-yellow-100 text-yellow-700'
+                            : task.status === 'changes_requested'
+                            ? 'bg-amber-100 text-amber-700'
                             : 'bg-gray-100 text-gray-600'
                         }`}
                       >
