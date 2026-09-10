@@ -5,7 +5,7 @@ import { authenticate, requireRole } from '../middleware/authenticate'
 import { validate } from '../middleware/validate'
 import { suggestTopicsSchema, matchSupervisorsSchema } from '../lib/schemas'
 import { suggestTopics, explainSupervisorMatches } from '../lib/gemini'
-import { rankSupervisors, SupervisorCandidate } from '../lib/supervisorMatch'
+import { rankSupervisors, extractKeywords, SupervisorCandidate } from '../lib/supervisorMatch'
 import { audit } from '../lib/auditLog'
 import { notifyMany, getAdminIds } from '../lib/notify'
 
@@ -38,6 +38,63 @@ interface DbSupervisorCandidate {
   department:  string | null
   expertise:   string | null
   group_count: string
+}
+
+// ─── Shared helpers ────────────────────────────────────────────────────────────
+
+/** Every active supervisor, with their current group load. Deactivated
+ * supervisors are excluded — they can't be assigned anyway. */
+async function getSupervisorCandidates(): Promise<SupervisorCandidate[]> {
+  const rows = await query<DbSupervisorCandidate>(
+    `SELECT u.id, u.name, u.email, u.department, u.expertise, COUNT(g.id) AS group_count
+     FROM users u
+     LEFT JOIN groups g ON g.supervisor_id = u.id
+     WHERE u.role = 'supervisor' AND u.is_active = TRUE
+     GROUP BY u.id`
+  )
+  return rows.map((c) => ({
+    id:         c.id,
+    name:       c.name,
+    email:      c.email,
+    department: c.department,
+    expertise:  c.expertise,
+    groupCount: Number(c.group_count),
+  }))
+}
+
+/**
+ * rankSupervisors() plus the best-effort Gemini re-rank/explain layer,
+ * merged into one ordered list. On any AI failure this just falls back to
+ * the plain rule-based order with no explanation — never blocks.
+ */
+async function rankAndExplain(topicTitle: string, keywords: string[], department: string | null) {
+  const candidates = await getSupervisorCandidates()
+  const matches = rankSupervisors(candidates, keywords, department)
+
+  const expertiseById = new Map(candidates.map((c) => [c.id, c.expertise]))
+  const explanations = await explainSupervisorMatches(
+    topicTitle,
+    keywords,
+    matches.map((m) => ({
+      supervisorId:    m.supervisorId,
+      name:            m.name,
+      expertise:       expertiseById.get(m.supervisorId) ?? null,
+      score:           m.score,
+      matchedKeywords: m.matchedKeywords,
+    }))
+  )
+
+  const reasonById = new Map(explanations.map((e) => [e.supervisorId, e.reason]))
+  const ordered = explanations.length === matches.length
+    ? explanations
+        .map((e) => matches.find((m) => m.supervisorId === e.supervisorId))
+        .filter((m): m is typeof matches[number] => Boolean(m))
+    : matches
+
+  return {
+    matches: ordered.map((m) => ({ ...m, reason: reasonById.get(m.supervisorId) ?? null })),
+    aiExplained: explanations.length > 0,
+  }
 }
 
 // ─── POST /ai/topics — generate topic suggestions ─────────────────────────────
@@ -116,54 +173,16 @@ router.post(
       [userId]
     )
 
-    const candidates = await query<DbSupervisorCandidate>(
-      `SELECT u.id, u.name, u.email, u.department, u.expertise, COUNT(g.id) AS group_count
-       FROM users u
-       LEFT JOIN groups g ON g.supervisor_id = u.id
-       WHERE u.role = 'supervisor'
-       GROUP BY u.id`
-    )
-
-    const matchInput: SupervisorCandidate[] = candidates.map((c) => ({
-      id:         c.id,
-      name:       c.name,
-      email:      c.email,
-      department: c.department,
-      expertise:  c.expertise,
-      groupCount: Number(c.group_count),
-    }))
-
-    const matches = rankSupervisors(matchInput, keywords ?? [], student?.department ?? null)
-
-    // AI layer: re-rank this rule-based shortlist and add a one-line "why"
-    // per candidate. Best-effort — on any failure (quota, bad response) we
-    // fall back to the rule-based order with no explanation, never block.
-    const expertiseById = new Map(candidates.map((c) => [c.id, c.expertise]))
-    const explanations = await explainSupervisorMatches(
+    const { matches: finalMatches, aiExplained } = await rankAndExplain(
       topicTitle,
       keywords ?? [],
-      matches.map((m) => ({
-        supervisorId:    m.supervisorId,
-        name:            m.name,
-        expertise:       expertiseById.get(m.supervisorId) ?? null,
-        score:           m.score,
-        matchedKeywords: m.matchedKeywords,
-      }))
+      student?.department ?? null
     )
-
-    const reasonById = new Map(explanations.map((e) => [e.supervisorId, e.reason]))
-    const ordered = explanations.length === matches.length
-      ? explanations
-          .map((e) => matches.find((m) => m.supervisorId === e.supervisorId))
-          .filter((m): m is typeof matches[number] => Boolean(m))
-      : matches
-
-    const finalMatches = ordered.map((m) => ({ ...m, reason: reasonById.get(m.supervisorId) ?? null }))
 
     await audit(userId, 'ai.supervisor_match_requested', 'supervisor_match', null, {
       topicTitle,
       keywords,
-      aiExplained: explanations.length > 0,
+      aiExplained,
     })
 
     const adminIds = await getAdminIds()
@@ -176,6 +195,50 @@ router.post(
     )
 
     res.json(finalMatches)
+  }
+)
+
+// ─── GET /ai/group/:groupId/supervisor-suggestions — ranked picks for admin ───
+// Powers the "suggested match" panel on the admin's assign-supervisor UI.
+// Derives keywords from the group's latest proposal — if it hasn't submitted
+// one yet there's nothing to match against, so this returns an empty list
+// rather than guessing. The admin still makes the assignment via the existing
+// PATCH /groups/:id/supervisor; this only ranks and explains candidates.
+
+router.get(
+  '/group/:groupId/supervisor-suggestions',
+  requireRole('admin'),
+  geminiLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const groupId = Array.isArray(req.params.groupId) ? req.params.groupId[0] : req.params.groupId
+
+    const group = await queryOne<{ id: string; leader_id: string }>(
+      'SELECT id, leader_id FROM groups WHERE id = $1',
+      [groupId]
+    )
+    if (!group) {
+      res.status(404).json({ error: 'Group not found' })
+      return
+    }
+
+    const proposal = await queryOne<{ title: string; abstract: string }>(
+      'SELECT title, abstract FROM proposals WHERE group_id = $1 ORDER BY version DESC LIMIT 1',
+      [groupId]
+    )
+    if (!proposal) {
+      res.json({ suggestions: [], proposalTitle: null })
+      return
+    }
+
+    const keywords = extractKeywords(`${proposal.title} ${proposal.abstract}`)
+    const leader = await queryOne<{ department: string | null }>(
+      'SELECT department FROM users WHERE id = $1',
+      [group.leader_id]
+    )
+
+    const { matches } = await rankAndExplain(proposal.title, keywords, leader?.department ?? null)
+
+    res.json({ suggestions: matches, proposalTitle: proposal.title })
   }
 )
 
@@ -227,38 +290,15 @@ router.get('/group/:groupId/review', requireRole('supervisor', 'admin'), async (
 
   let matches: unknown[] = []
   if (proposal) {
-    const keywords = [...new Set(
-      `${proposal.title} ${proposal.abstract}`
-        .toLowerCase()
-        .split(/[^a-z0-9+#]+/)
-        .filter((w) => w.length > 3)
-    )].slice(0, 30)
+    const keywords = extractKeywords(`${proposal.title} ${proposal.abstract}`)
 
     const leader = await queryOne<{ department: string | null }>(
       `SELECT u.department FROM groups g JOIN users u ON u.id = g.leader_id WHERE g.id = $1`,
       [groupId]
     )
 
-    const candidates = await query<DbSupervisorCandidate>(
-      `SELECT u.id, u.name, u.email, u.department, u.expertise, COUNT(g.id) AS group_count
-       FROM users u
-       LEFT JOIN groups g ON g.supervisor_id = u.id
-       WHERE u.role = 'supervisor'
-       GROUP BY u.id`
-    )
-
-    matches = rankSupervisors(
-      candidates.map((c) => ({
-        id:         c.id,
-        name:       c.name,
-        email:      c.email,
-        department: c.department,
-        expertise:  c.expertise,
-        groupCount: Number(c.group_count),
-      })),
-      keywords,
-      leader?.department ?? null
-    ).slice(0, 5)
+    const candidates = await getSupervisorCandidates()
+    matches = rankSupervisors(candidates, keywords, leader?.department ?? null)
   }
 
   res.json({

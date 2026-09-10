@@ -33,6 +33,17 @@ function splitKeywords(text: string | null): string[] {
     .filter(Boolean)
 }
 
+/** Pulls candidate keywords out of free text (a proposal's title + abstract)
+ * for matching against a supervisor's comma-separated expertise list. */
+export function extractKeywords(text: string, limit = 30): string[] {
+  return [...new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9+#]+/)
+      .filter((w) => w.length > 3)
+  )].slice(0, limit)
+}
+
 export function rankSupervisors(
   candidates:        SupervisorCandidate[],
   topicKeywords:      string[],

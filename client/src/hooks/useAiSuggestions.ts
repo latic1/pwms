@@ -16,8 +16,29 @@ export async function generateTopicSuggestions(interests: string[]): Promise<Top
   return data.suggestions
 }
 
-/** Rank supervisors for a chosen topic (deterministic, not AI) */
+/** Rank supervisors for a chosen topic — rule-based shortlist, Gemini-explained */
 export async function matchSupervisors(topicTitle: string, keywords?: string[]): Promise<SupervisorMatch[]> {
   const { data } = await api.post('/ai/supervisor-matches', { topicTitle, keywords })
   return data
+}
+
+interface SupervisorSuggestionsResponse {
+  suggestions: SupervisorMatch[]
+  proposalTitle: string | null
+}
+
+/** Admin: ranked supervisor suggestions for a group, derived from its latest
+ * proposal. Only fetch while the assign-supervisor form is actually open —
+ * this spends the shared Gemini quota. */
+export function useSupervisorSuggestions(groupId: string | null) {
+  const { data, error, isLoading } = useSWR<SupervisorSuggestionsResponse>(
+    groupId ? `/ai/group/${groupId}/supervisor-suggestions` : null,
+    fetcher
+  )
+  return {
+    suggestions:   data?.suggestions ?? [],
+    proposalTitle: data?.proposalTitle ?? null,
+    error,
+    isLoading,
+  }
 }

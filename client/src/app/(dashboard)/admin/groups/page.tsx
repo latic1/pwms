@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useGroups, useGroup } from '@/hooks/useGroup'
 import { useUsers } from '@/hooks/useUsers'
+import { useSupervisorSuggestions } from '@/hooks/useAiSuggestions'
 import api from '@/lib/api'
 
 function GroupDetail({ groupId, onClose }: { groupId: string; onClose: () => void }) {
@@ -12,6 +13,10 @@ function GroupDetail({ groupId, onClose }: { groupId: string; onClose: () => voi
   const [editingSupervisor, setEditingSupervisor] = useState(false)
   const [newSupervisorId,   setNewSupervisorId]   = useState('')
   const [error,             setError]             = useState('')
+
+  // Only spend the AI quota while the picker is actually open
+  const { suggestions, proposalTitle, isLoading: suggestionsLoading } =
+    useSupervisorSuggestions(editingSupervisor ? groupId : null)
 
   async function handleAssignSupervisor(e: React.FormEvent) {
     e.preventDefault()
@@ -59,24 +64,61 @@ function GroupDetail({ groupId, onClose }: { groupId: string; onClose: () => voi
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Supervisor</p>
             {editingSupervisor ? (
-              <form onSubmit={handleAssignSupervisor} className="flex gap-2 items-center">
-                <select
-                  value={newSupervisorId}
-                  onChange={(e) => setNewSupervisorId(e.target.value)}
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
-                >
-                  <option value="">— Unassign —</option>
-                  {supervisors.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <button type="submit" className="px-3 py-1.5 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-700">
-                  Save
-                </button>
-                <button type="button" onClick={() => setEditingSupervisor(false)} className="text-sm text-gray-500 hover:text-gray-700">
-                  Cancel
-                </button>
-              </form>
+              <div className="space-y-3">
+                {/* AI-suggested matches, ranked from the group's latest proposal */}
+                {suggestionsLoading ? (
+                  <p className="text-xs text-gray-400">Finding matches...</p>
+                ) : suggestions.length > 0 ? (
+                  <div className="rounded-lg bg-indigo-50 border border-indigo-100 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-indigo-800">
+                      ✨ Suggested matches{proposalTitle ? <> for &ldquo;{proposalTitle}&rdquo;</> : null}
+                    </p>
+                    {suggestions.slice(0, 3).map((s, i) => (
+                      <div key={s.supervisorId} className="flex items-start justify-between gap-3 bg-white rounded-md border border-indigo-100 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800">
+                            {i === 0 && '⭐ '}{s.name}
+                            <span className="ml-1.5 text-xs font-normal text-gray-400">score {s.score}</span>
+                          </p>
+                          {s.reason && <p className="text-xs text-gray-500 mt-0.5">{s.reason}</p>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewSupervisorId(s.supervisorId)}
+                          className="shrink-0 text-xs px-2.5 py-1 rounded-md border border-indigo-300 text-indigo-700 hover:bg-indigo-50 whitespace-nowrap"
+                        >
+                          {newSupervisorId === s.supervisorId ? 'Selected ✓' : 'Use this match'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">
+                    {proposalTitle === null
+                      ? 'No proposal submitted yet — can’t suggest a match. Pick manually below.'
+                      : 'No AI suggestions available — pick manually below.'}
+                  </p>
+                )}
+
+                <form onSubmit={handleAssignSupervisor} className="flex gap-2 items-center">
+                  <select
+                    value={newSupervisorId}
+                    onChange={(e) => setNewSupervisorId(e.target.value)}
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    <option value="">— Unassign —</option>
+                    {supervisors.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <button type="submit" className="px-3 py-1.5 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-700">
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setEditingSupervisor(false)} className="text-sm text-gray-500 hover:text-gray-700">
+                    Cancel
+                  </button>
+                </form>
+              </div>
             ) : (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-700">
