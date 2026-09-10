@@ -416,12 +416,44 @@ function GroupDetail({ groupId }: { groupId: string }) {
 export default function SupervisorGroupsPage() {
   const { groups } = useGroups()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [exporting,  setExporting]  = useState(false)
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await api.get('/exports/my-students', { responseType: 'blob' })
+      const url = URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'my-students.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Failed to export student list.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
-        <p className="text-sm text-gray-500 mt-1">Monitor all your assigned project groups</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
+          <p className="text-sm text-gray-500 mt-1">Monitor all your assigned project groups</p>
+        </div>
+        {groups.length > 0 && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            {exporting ? 'Exporting...' : 'Export students to Excel'}
+          </button>
+        )}
       </div>
 
       {groups.length === 0 ? (
