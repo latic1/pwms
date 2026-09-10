@@ -30,7 +30,9 @@ const navItems: Record<Role, NavItem[]> = {
   ],
   admin: [
     { label: 'Dashboard',        href: '/admin',                  icon: <IconGrid /> },
-    { label: 'Users',            href: '/admin/users',            icon: <IconUsers /> },
+    { label: 'Students',         href: '/admin/users/students',   icon: <IconUsers /> },
+    { label: 'Supervisors',      href: '/admin/users/supervisors',icon: <IconStar /> },
+    { label: 'Admins',           href: '/admin/users/admins',     icon: <IconCheck /> },
     { label: 'Groups',           href: '/admin/groups',           icon: <IconFolder /> },
     { label: 'Panels',           href: '/admin/panels',           icon: <IconList /> },
     { label: 'Academic Periods', href: '/admin/periods',          icon: <IconCalendar /> },
