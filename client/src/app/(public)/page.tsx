@@ -38,13 +38,6 @@ interface PublicProject {
   memberCount:   number
 }
 
-interface Stats {
-  groups:            number
-  students:          number
-  approvedProposals: number
-  periods:           number
-}
-
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,7 +64,6 @@ export default function LandingPage() {
   const router = useRouter()
 
   const { data: announcements = [] } = useSWR<Announcement[]>(`${API_BASE}/public/announcements`, fetcher)
-  const { data: stats }              = useSWR<Stats>(`${API_BASE}/public/stats`, fetcher)
   const { data: topProjects = [] }   = useSWR<PublicProject[]>(
     `${API_BASE}/public/projects?limit=6`, fetcher
   )
@@ -150,25 +142,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* ── Stats ── */}
-      {stats && (
-        <section className="bg-indigo-600 text-white">
-          <div className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {[
-              { label: 'Student Groups',      value: stats.groups },
-              { label: 'Students Enrolled',   value: stats.students },
-              { label: 'Approved Proposals',  value: stats.approvedProposals },
-              { label: 'Academic Periods',    value: stats.periods },
-            ].map((s) => (
-              <div key={s.label}>
-                <p className="text-3xl font-bold">{s.value}</p>
-                <p className="text-sm text-indigo-200 mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ── Features ── */}
       <section className="max-w-6xl mx-auto px-6 py-20">
