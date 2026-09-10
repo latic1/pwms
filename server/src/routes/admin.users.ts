@@ -35,6 +35,7 @@ interface DbUser {
   index_number: string | null
   department: string | null
   program: string | null
+  expertise: string | null
   created_at: string
   is_active: boolean
 }
@@ -62,7 +63,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
   const users = await query<DbUser>(
-    `SELECT id, name, email, role, phone, index_number, department, program, created_at, is_active
+    `SELECT id, name, email, role, phone, index_number, department, program, expertise, created_at, is_active
      FROM users
      ${where}
      ORDER BY created_at DESC`,
@@ -75,7 +76,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 // ─── POST /admin/users ────────────────────────────────────────────────────────
 
 router.post('/', validate(createUserSchema), async (req: Request, res: Response): Promise<void> => {
-  const { name, email, role, phone, indexNumber, department, program } = req.body
+  const { name, email, role, phone, indexNumber, department, program, expertise } = req.body
 
   if (!name || !email || !role) {
     res.status(400).json({ error: 'name, email and role are required' })
@@ -113,9 +114,9 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
   const cleanPhone = phone?.trim().replace(/\s+/g, '') || null
 
   const [newUser] = await query<DbUser>(
-    `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program, must_change_password)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
-     RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
+    `INSERT INTO users (name, email, password_hash, role, phone, index_number, department, program, expertise, must_change_password)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)
+     RETURNING id, name, email, role, phone, index_number, department, program, expertise, created_at, is_active`,
     [
       name.trim(),
       email.toLowerCase().trim(),
@@ -125,6 +126,7 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
       role === 'student' ? (indexNumber ?? null) : null,
       role === 'student' ? (department ?? null)  : null,
       role === 'student' ? (program ?? null)      : null,
+      role === 'supervisor' ? (expertise ?? null) : null,
     ]
   )
 
@@ -142,7 +144,7 @@ router.post('/', validate(createUserSchema), async (req: Request, res: Response)
 
 router.patch('/:id', validate(updateUserSchema), async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params
-  const { name, email, phone, role, indexNumber, department, program } = req.body
+  const { name, email, phone, role, indexNumber, department, program, expertise } = req.body
 
   const user = await queryOne<DbUser>('SELECT * FROM users WHERE id = $1', [id])
   if (!user) {
@@ -173,16 +175,17 @@ router.patch('/:id', validate(updateUserSchema), async (req: Request, res: Respo
          email        = COALESCE($2, email),
          phone        = COALESCE($3, phone),
          role         = $4,
-         index_number = CASE WHEN $4 = 'student' THEN COALESCE($5, index_number) ELSE NULL END,
-         department   = CASE WHEN $4 = 'student' THEN COALESCE($6, department)   ELSE NULL END,
-         program      = CASE WHEN $4 = 'student' THEN COALESCE($7, program)      ELSE NULL END
-     WHERE id = $8
-     RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
+         index_number = CASE WHEN $4 = 'student'    THEN COALESCE($5, index_number) ELSE NULL END,
+         department   = CASE WHEN $4 = 'student'    THEN COALESCE($6, department)   ELSE NULL END,
+         program      = CASE WHEN $4 = 'student'    THEN COALESCE($7, program)      ELSE NULL END,
+         expertise    = CASE WHEN $4 = 'supervisor' THEN COALESCE($8, expertise)    ELSE NULL END
+     WHERE id = $9
+     RETURNING id, name, email, role, phone, index_number, department, program, expertise, created_at, is_active`,
     // nextRole (not the raw `role` field) drives both the role column and the
-    // student-fields CASE — otherwise an edit that doesn't touch role (e.g.
-    // just fixing a typo'd name) would evaluate `NULL = 'student'` as false
-    // and wipe the student's index number/department/program to NULL.
-    [name ?? null, email ?? null, phone ?? null, nextRole, indexNumber ?? null, department ?? null, program ?? null, id]
+    // student/supervisor-fields CASEs — otherwise an edit that doesn't touch
+    // role (e.g. just fixing a typo'd name) would evaluate `NULL = 'student'`
+    // as false and wipe the existing role-specific fields to NULL.
+    [name ?? null, email ?? null, phone ?? null, nextRole, indexNumber ?? null, department ?? null, program ?? null, expertise ?? null, id]
   )
 
   res.json(toSafeUser(updatedUser!))
@@ -384,7 +387,7 @@ router.post('/:id/reactivate', async (req: Request, res: Response): Promise<void
 
   const [updated] = await query<DbUser>(
     `UPDATE users SET is_active = TRUE WHERE id = $1
-     RETURNING id, name, email, role, phone, index_number, department, program, created_at, is_active`,
+     RETURNING id, name, email, role, phone, index_number, department, program, expertise, created_at, is_active`,
     [id]
   )
   res.json(toSafeUser(updated))
@@ -402,6 +405,7 @@ function toSafeUser(u: DbUser) {
     indexNumber: u.index_number,
     department:  u.department,
     program:     u.program,
+    expertise:   u.expertise,
     createdAt:   u.created_at,
     isActive:    u.is_active,
   }

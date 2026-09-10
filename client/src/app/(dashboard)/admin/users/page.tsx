@@ -298,6 +298,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: User; onClose: () => 
   const [indexNumber, setIndexNumber] = useState(user.indexNumber ?? '')
   const [department,  setDepartment]  = useState(user.department ?? '')
   const [program,     setProgram]     = useState(user.program ?? '')
+  const [expertise,   setExpertise]   = useState(user.expertise ?? '')
   const [error,       setError]       = useState('')
   const [saving,      setSaving]      = useState(false)
 
@@ -316,6 +317,9 @@ function EditUserModal({ user, onClose, onSaved }: { user: User; onClose: () => 
           indexNumber: indexNumber.trim(),
           department:  department.trim(),
           program:     program.trim(),
+        }),
+        ...(user.role === 'supervisor' && {
+          expertise: expertise.trim(),
         }),
       })
       onSaved()
@@ -397,6 +401,23 @@ function EditUserModal({ user, onClose, onSaved }: { user: User; onClose: () => 
               </div>
             </div>
           )}
+          {user.role === 'supervisor' && (
+            <div className="border-t pt-4">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Interests / Expertise <span className="text-gray-400 font-normal">(comma-separated)</span>
+              </label>
+              <textarea
+                value={expertise}
+                onChange={(e) => setExpertise(e.target.value)}
+                rows={2}
+                placeholder="e.g. machine learning, databases, mobile development"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Used to match this supervisor to student topics — see AI Suggestions.
+              </p>
+            </div>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex items-center justify-end gap-3 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
@@ -438,6 +459,7 @@ export default function UsersPage() {
   const [indexNumber, setIndexNumber] = useState('')
   const [department,  setDepartment]  = useState('')
   const [program,     setProgram]     = useState('')
+  const [expertise,   setExpertise]   = useState('')
 
   const filtered = users.filter((u) => {
     const matchSearch =
@@ -450,7 +472,7 @@ export default function UsersPage() {
 
   function openForm() {
     setName(''); setEmail(''); setPhone(''); setRole('student')
-    setIndexNumber(''); setDepartment(''); setProgram('')
+    setIndexNumber(''); setDepartment(''); setProgram(''); setExpertise('')
     setFormError(''); setNewCreds(null)
     setShowForm(true)
   }
@@ -469,6 +491,9 @@ export default function UsersPage() {
           indexNumber: indexNumber.trim(),
           department:  department.trim(),
           program:     program.trim(),
+        }),
+        ...(role === 'supervisor' && {
+          expertise: expertise.trim(),
         }),
       })
       await mutate()
@@ -678,6 +703,24 @@ export default function UsersPage() {
               </div>
             )}
 
+            {role === 'supervisor' && (
+              <div className="border-t pt-4">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Interests / Expertise <span className="text-gray-400 font-normal">(comma-separated, optional)</span>
+                </label>
+                <textarea
+                  value={expertise}
+                  onChange={(e) => setExpertise(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. machine learning, databases, mobile development"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Used to match this supervisor to student topics — the supervisor can update this later from Settings.
+                </p>
+              </div>
+            )}
+
             {formError && <p className="text-sm text-red-600">{formError}</p>}
 
             <div className="flex items-center justify-end gap-3 pt-1">
@@ -731,7 +774,7 @@ export default function UsersPage() {
             <tr className="border-b bg-gray-50">
               <th className="text-left px-5 py-3 font-medium text-gray-600">Name</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600">Email</th>
-              <th className="text-left px-5 py-3 font-medium text-gray-600 hidden md:table-cell">Index / Faculty</th>
+              <th className="text-left px-5 py-3 font-medium text-gray-600 hidden md:table-cell">Details</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600">Role</th>
               <th className="text-left px-5 py-3 font-medium text-gray-600">Status</th>
               <th className="px-5 py-3" />
@@ -747,12 +790,14 @@ export default function UsersPage() {
                 <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${u.isActive === false ? 'opacity-50' : ''}`}>
                   <td className="px-5 py-3 font-medium text-gray-800">{u.name}</td>
                   <td className="px-5 py-3 text-gray-500 text-xs">{u.email}</td>
-                  <td className="px-5 py-3 hidden md:table-cell">
+                  <td className="px-5 py-3 hidden md:table-cell max-w-[220px]">
                     {u.indexNumber ? (
                       <div>
                         <p className="text-xs font-medium text-gray-700">{u.indexNumber}</p>
                         <p className="text-xs text-gray-400">{u.department}</p>
                       </div>
+                    ) : u.role === 'supervisor' && u.expertise ? (
+                      <p className="text-xs text-gray-500 truncate" title={u.expertise}>{u.expertise}</p>
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}

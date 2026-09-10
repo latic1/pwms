@@ -43,6 +43,9 @@ export const createUserSchema = z.object({
   indexNumber: z.string().max(50).trim().optional(),
   department:  z.string().max(100).trim().optional(),
   program:     z.string().max(100).trim().optional(),
+  // Comma-separated keywords, e.g. "machine learning, nlp, databases" — feeds
+  // the AI-assisted student/supervisor topic matching.
+  expertise:   z.string().max(500).trim().optional(),
 }).superRefine((data, ctx) => {
   // Students need these to appear anywhere in the system (group rosters,
   // bulk import, reports) — enforce the same requirement here that the
@@ -62,6 +65,7 @@ export const updateUserSchema = z.object({
   indexNumber: z.string().max(50).trim().optional(),
   department:  z.string().max(100).trim().optional(),
   program:     z.string().max(100).trim().optional(),
+  expertise:   z.string().max(500).trim().optional(),
 })
 
 // ─── Groups ───────────────────────────────────────────────────────────────────

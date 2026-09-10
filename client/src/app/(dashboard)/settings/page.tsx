@@ -5,6 +5,69 @@ import { useAuth } from '@/lib/auth-context'
 import api from '@/lib/api'
 import { isPushSupported, getExistingSubscription, enablePush, disablePush } from '@/lib/push'
 
+function ExpertiseCard() {
+  const [expertise, setExpertise] = useState('')
+  const [loading,   setLoading]   = useState(true)
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState('')
+  const [success,   setSuccess]   = useState(false)
+
+  useEffect(() => {
+    api.get('/auth/me')
+      .then((res) => setExpertise(res.data.expertise ?? ''))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setSuccess(false)
+    setSaving(true)
+    try {
+      await api.patch('/auth/me', { expertise: expertise.trim() })
+      setSuccess(true)
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Failed to update interests.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <h2 className="font-semibold text-gray-800 mb-1">Interests / Expertise</h2>
+      <p className="text-sm text-gray-500 mb-4">
+        Used to match students&apos; project topics to you — keep it current for better matches.
+      </p>
+      {loading ? (
+        <p className="text-sm text-gray-400">Loading...</p>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-3">
+          <textarea
+            value={expertise}
+            onChange={(e) => setExpertise(e.target.value)}
+            rows={2}
+            placeholder="e.g. machine learning, databases, mobile development"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 transition resize-none"
+          />
+          <p className="text-[11px] text-gray-400">Comma-separated keywords work best.</p>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {success && <p className="text-sm text-green-700 font-medium">Saved.</p>}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 function PushNotificationsCard() {
   const [supported,  setSupported]  = useState(true)
   const [enabled,    setEnabled]    = useState(false)
@@ -160,6 +223,8 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {user?.role === 'supervisor' && <ExpertiseCard />}
 
       <PushNotificationsCard />
 

@@ -9,6 +9,8 @@ export interface User {
   indexNumber?: string
   department?: string
   program?: string
+  // Supervisor-specific — comma-separated keywords, feeds AI-assisted matching
+  expertise?: string | null
   createdAt?: string
   mustChangePassword?: boolean
   isActive?: boolean
