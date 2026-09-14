@@ -156,6 +156,23 @@ export default function StudentDashboard() {
                           hour: '2-digit', minute: '2-digit',
                         })}
                       </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {m.meetingType === 'in_person' ? (
+                          `📍 ${m.venue || 'Venue not set'}`
+                        ) : m.meetingLink ? (
+                          <a
+                            href={m.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            💻 Join meeting link
+                          </a>
+                        ) : (
+                          '💻 Meeting link not set'
+                        )}
+                      </p>
                       {m.notes && <p className="text-xs text-gray-400 truncate">{m.notes}</p>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

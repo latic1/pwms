@@ -4,7 +4,7 @@ import { authenticate, requireRole } from '../middleware/authenticate'
 import { audit } from '../lib/auditLog'
 import { notifyMany } from '../lib/notify'
 import { validate } from '../middleware/validate'
-import { createMeetingSchema } from '../lib/schemas'
+import { createMeetingSchema, updateMeetingSchema } from '../lib/schemas'
 
 /** IDs of every member of a group — used to fan out meeting notifications. */
 async function groupMemberIds(groupId: string): Promise<string[]> {
@@ -36,6 +36,9 @@ interface DbMeeting {
   scheduled_at: string
   status: 'proposed' | 'confirmed' | 'completed'
   notes: string | null
+  meeting_type: 'in_person' | 'online'
+  venue: string | null
+  meeting_link: string | null
   created_at: string
   updated_at: string
 }
@@ -48,6 +51,9 @@ function formatMeeting(m: DbMeeting) {
     scheduledAt:  m.scheduled_at,
     status:       m.status,
     notes:        m.notes,
+    meetingType:  m.meeting_type,
+    venue:        m.venue,
+    meetingLink:  m.meeting_link,
     createdAt:    m.created_at,
     updatedAt:    m.updated_at,
   }
@@ -115,7 +121,7 @@ router.get('/:groupId', async (req: Request, res: Response): Promise<void> => {
 router.post('/:groupId', requireRole('supervisor'), validate(createMeetingSchema), async (req: Request, res: Response): Promise<void> => {
   const groupId = p(req.params.groupId)
   const { sub } = req.user!
-  const { scheduledAt, notes } = req.body
+  const { scheduledAt, notes, meetingType, venue, meetingLink } = req.body
 
   if (!scheduledAt) {
     res.status(400).json({ error: 'scheduledAt is required' })
@@ -146,10 +152,18 @@ router.post('/:groupId', requireRole('supervisor'), validate(createMeetingSchema
   }
 
   const [meeting] = await query<DbMeeting>(
-    `INSERT INTO meetings (group_id, supervisor_id, scheduled_at, notes)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO meetings (group_id, supervisor_id, scheduled_at, notes, meeting_type, venue, meeting_link)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [groupId, sub, scheduledDate.toISOString(), notes?.trim() ?? null]
+    [
+      groupId,
+      sub,
+      scheduledDate.toISOString(),
+      notes?.trim() ?? null,
+      meetingType ?? 'in_person',
+      venue?.trim() ?? null,
+      meetingLink?.trim() ?? null,
+    ]
   )
 
   await audit(sub, 'meeting.scheduled', 'group', groupId, {
@@ -170,11 +184,11 @@ router.post('/:groupId', requireRole('supervisor'), validate(createMeetingSchema
 
 // ─── PATCH /meetings/:groupId/:meetingId — update status or notes ─────────────
 
-router.patch('/:groupId/:meetingId', async (req: Request, res: Response): Promise<void> => {
+router.patch('/:groupId/:meetingId', validate(updateMeetingSchema), async (req: Request, res: Response): Promise<void> => {
   const groupId   = p(req.params.groupId)
   const meetingId = p(req.params.meetingId)
   const { sub, role } = req.user!
-  const { status, notes, scheduledAt } = req.body
+  const { status, notes, scheduledAt, meetingType, venue, meetingLink } = req.body
 
   const meeting = await queryOne<DbMeeting>(
     'SELECT * FROM meetings WHERE id = $1 AND group_id = $2',
@@ -212,7 +226,7 @@ router.patch('/:groupId/:meetingId', async (req: Request, res: Response): Promis
       res.status(403).json({ error: 'Students can only confirm a meeting' })
       return
     }
-    if (scheduledAt || notes !== undefined) {
+    if (scheduledAt || notes !== undefined || meetingType || venue !== undefined || meetingLink !== undefined) {
       res.status(403).json({ error: 'Students cannot edit meeting details' })
       return
     }
@@ -230,10 +244,24 @@ router.patch('/:groupId/:meetingId', async (req: Request, res: Response): Promis
      SET status       = COALESCE($1, status),
          notes        = COALESCE($2, notes),
          scheduled_at = COALESCE($3, scheduled_at),
+         meeting_type = COALESCE($4, meeting_type),
+         venue        = COALESCE($5, venue),
+         meeting_link = COALESCE($6, meeting_link),
          updated_at   = NOW()
-     WHERE id = $4
+     WHERE id = $7
      RETURNING *`,
-    [status ?? null, notes?.trim() ?? null, newScheduledAt, meetingId]
+    [
+      status ?? null,
+      notes?.trim() ?? null,
+      newScheduledAt,
+      meetingType ?? null,
+      // '' (explicitly clearing venue/link when switching type) must survive
+      // as '' here, not collapse to null — COALESCE only skips a true NULL,
+      // so an empty string still overwrites the old value as intended.
+      venue !== undefined ? venue.trim() : null,
+      meetingLink !== undefined ? meetingLink.trim() : null,
+      meetingId,
+    ]
   )
 
   if (status && status !== meeting.status) {

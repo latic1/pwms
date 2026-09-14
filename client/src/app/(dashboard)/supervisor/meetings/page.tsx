@@ -21,15 +21,21 @@ export default function MeetingsPage() {
   const [date,           setDate]           = useState('')
   const [time,           setTime]           = useState('')
   const [notes,          setNotes]          = useState('')
+  const [meetingType,    setMeetingType]    = useState<Meeting['meetingType']>('in_person')
+  const [venue,          setVenue]          = useState('')
+  const [meetingLink,    setMeetingLink]    = useState('')
   const [filter,         setFilter]         = useState<Meeting['status'] | 'all'>('all')
   const [scheduling,     setScheduling]     = useState(false)
   const [scheduleError,  setScheduleError]  = useState('')
 
   // Editing an existing meeting (reschedule / change notes)
-  const [editingId,   setEditingId]   = useState<string | null>(null)
-  const [editDate,    setEditDate]    = useState('')
-  const [editTime,    setEditTime]    = useState('')
-  const [editNotes,   setEditNotes]   = useState('')
+  const [editingId,        setEditingId]        = useState<string | null>(null)
+  const [editDate,         setEditDate]         = useState('')
+  const [editTime,         setEditTime]         = useState('')
+  const [editNotes,        setEditNotes]        = useState('')
+  const [editMeetingType,  setEditMeetingType]  = useState<Meeting['meetingType']>('in_person')
+  const [editVenue,        setEditVenue]        = useState('')
+  const [editMeetingLink,  setEditMeetingLink]  = useState('')
   const [editBusy,    setEditBusy]    = useState(false)
   const [editError,   setEditError]  = useState('')
 
@@ -43,12 +49,18 @@ export default function MeetingsPage() {
       await api.post(`/meetings/${groupId}`, {
         scheduledAt: new Date(`${date}T${time}`).toISOString(),
         notes: notes || undefined,
+        meetingType,
+        venue: meetingType === 'in_person' ? venue.trim() || undefined : undefined,
+        meetingLink: meetingType === 'online' ? meetingLink.trim() || undefined : undefined,
       })
       await mutate()
       setShowForm(false)
       setDate('')
       setTime('')
       setNotes('')
+      setMeetingType('in_person')
+      setVenue('')
+      setMeetingLink('')
     } catch (err: any) {
       setScheduleError(err?.response?.data?.error ?? 'Failed to schedule meeting.')
     } finally {
@@ -71,6 +83,9 @@ export default function MeetingsPage() {
     setEditDate(d.toISOString().slice(0, 10))
     setEditTime(d.toTimeString().slice(0, 5))
     setEditNotes(m.notes ?? '')
+    setEditMeetingType(m.meetingType)
+    setEditVenue(m.venue ?? '')
+    setEditMeetingLink(m.meetingLink ?? '')
     setEditError('')
   }
 
@@ -81,6 +96,12 @@ export default function MeetingsPage() {
       await api.patch(`/meetings/${m.groupId}/${m.id}`, {
         scheduledAt: new Date(`${editDate}T${editTime}`).toISOString(),
         notes: editNotes.trim() || undefined,
+        meetingType: editMeetingType,
+        // Explicitly clear whichever field doesn't apply to the chosen type,
+        // not just omit it — otherwise switching type would leave the old
+        // venue/link behind instead of replacing it.
+        venue: editMeetingType === 'in_person' ? editVenue.trim() : '',
+        meetingLink: editMeetingType === 'online' ? editMeetingLink.trim() : '',
       })
       await mutate()
       setEditingId(null)
@@ -171,6 +192,50 @@ export default function MeetingsPage() {
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Format</label>
+              <div className="flex gap-2">
+                {(['in_person', 'online'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setMeetingType(t)}
+                    className={`px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                      meetingType === t
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    }`}
+                  >
+                    {t === 'in_person' ? '📍 In-person' : '💻 Online'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {meetingType === 'in_person' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>
+                <input
+                  value={venue}
+                  onChange={(e) => setVenue(e.target.value)}
+                  placeholder="e.g. Room 204, CS Building"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting link</label>
+                <input
+                  type="url"
+                  value={meetingLink}
+                  onChange={(e) => setMeetingLink(e.target.value)}
+                  placeholder="e.g. https://meet.google.com/..."
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Agenda / Notes (optional)</label>
               <textarea
@@ -241,6 +306,47 @@ export default function MeetingsPage() {
                       />
                     </div>
                   </div>
+
+                  <div className="flex gap-2">
+                    {(['in_person', 'online'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setEditMeetingType(t)}
+                        className={`px-3 py-1 rounded-lg border-2 text-xs font-medium transition-colors ${
+                          editMeetingType === t
+                            ? 'border-gray-900 bg-gray-900 text-white'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                        }`}
+                      >
+                        {t === 'in_person' ? '📍 In-person' : '💻 Online'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {editMeetingType === 'in_person' ? (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Venue</label>
+                      <input
+                        value={editVenue}
+                        onChange={(e) => setEditVenue(e.target.value)}
+                        placeholder="e.g. Room 204, CS Building"
+                        className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Meeting link</label>
+                      <input
+                        type="url"
+                        value={editMeetingLink}
+                        onChange={(e) => setEditMeetingLink(e.target.value)}
+                        placeholder="e.g. https://meet.google.com/..."
+                        className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Agenda / Notes</label>
                     <textarea
@@ -276,6 +382,22 @@ export default function MeetingsPage() {
                           weekday: 'long', year: 'numeric', month: 'short',
                           day: 'numeric', hour: '2-digit', minute: '2-digit',
                         })}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {m.meetingType === 'in_person' ? (
+                          <>📍 {m.venue || 'Venue not set'}</>
+                        ) : m.meetingLink ? (
+                          <a
+                            href={m.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            💻 Join meeting link
+                          </a>
+                        ) : (
+                          '💻 Meeting link not set'
+                        )}
                       </p>
                       {m.notes && (
                         <p className="text-xs text-gray-400 mt-2 italic">&quot;{m.notes}&quot;</p>

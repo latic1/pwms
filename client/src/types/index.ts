@@ -116,6 +116,9 @@ export interface Meeting {
   scheduledAt: string
   status: 'proposed' | 'confirmed' | 'completed'
   notes?: string
+  meetingType: 'in_person' | 'online'
+  venue?: string | null
+  meetingLink?: string | null
 }
 
 export interface Grade {

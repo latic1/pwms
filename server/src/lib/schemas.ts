@@ -113,9 +113,23 @@ export const reviewProposalSchema = z.object({
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────
 
+const MEETING_TYPES = ['in_person', 'online'] as const
+
 export const createMeetingSchema = z.object({
   scheduledAt: z.string().min(1, 'scheduledAt is required'),
   notes:       z.string().max(1000).trim().optional(),
+  meetingType: z.enum(MEETING_TYPES, { error: 'meetingType must be in_person or online' }).optional(),
+  venue:       z.string().max(300).trim().optional(),
+  meetingLink: z.string().max(500).trim().optional(),
+})
+
+export const updateMeetingSchema = z.object({
+  status:      z.enum(['proposed', 'confirmed', 'completed']).optional(),
+  notes:       z.string().max(1000).trim().optional(),
+  scheduledAt: z.string().optional(),
+  meetingType: z.enum(MEETING_TYPES, { error: 'meetingType must be in_person or online' }).optional(),
+  venue:       z.string().max(300).trim().optional(),
+  meetingLink: z.string().max(500).trim().optional(),
 })
 
 // ─── Grades ───────────────────────────────────────────────────────────────────
